@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductArchive;
 use App\Models\Vendor;
-// use App\Imports\ProductsImport;
-// use Maatwebsite\Excel\Facades\Excel;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 use App\Imports\ProductsImport;
@@ -22,7 +20,57 @@ class ProductController extends Controller
             return redirect()->intended('customer/products');
         }
 
-        $products = Product::selectRaw('
+        // NOTE: product rows are no longer fetched here. The table now loads
+        // its rows via AJAX from getProductsData() using server-side
+        // DataTables processing, so we don't pull every product on page load.
+
+        $years = DB::table('dt_product')
+            ->select('version_year as year')
+            ->groupBy('version_year')
+            ->orderBy('version_year', 'desc')
+            ->get();
+
+        foreach ($years as $y) {
+            $y->count = DB::table('dt_product')
+                ->where('version_year', $y->year)
+                ->count();
+
+            $y->is_published = DB::table('dt_product_year_control')
+                ->where('year', $y->year)
+                ->value('is_published') ?? 0;
+        }
+
+        $allSubProducts = \App\Models\SubProduct::pluck('sub_product_name')->toArray();
+        return view('products.index', compact('allSubProducts', 'years'));
+    }
+
+    /**
+     * AJAX endpoint consumed by the DataTables "serverSide" config on
+     * products.index. Handles paging, global search, and column sorting
+     * in SQL rather than loading every product row on every page view.
+     */
+    public function getProductsData(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 10);
+        $searchValue = trim((string) $request->input('search.value', ''));
+        $orderColumnIndex = $request->input('order.0.column');
+        $orderDir = strtolower($request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        // Maps DataTables column index -> sortable DB column.
+        // Index 0/1/5/10 (checkbox/image/sub_products/actions) are not sortable.
+        $sortableColumns = [
+            2 => 'product_style',
+            3 => 'factory_style',
+            4 => 'product_color',
+            6 => 'product_size_range',
+            7 => 'product_cost',
+            8 => 'product_wholesale_price',
+            9 => 'product_vendor_name',
+        ];
+
+        $grouped = Product::selectRaw('
                 MAX(product_ID) as product_ID,
                 MAX(product_image) as product_image,
                 MAX(factory_style) as factory_style,
@@ -36,52 +84,151 @@ class ProductController extends Controller
                 MAX(product_link) as product_link,
                 MAX(dt_product.show_from_inventory) as inventory_override
             ')
-            ->groupBy('product_style')
-            ->orderBy('product_style', 'ASC')
-            ->get();
-            
-        $years = DB::table('dt_product')
-            ->select('version_year as year')
-            ->groupBy('version_year')
-            ->orderBy('version_year', 'desc')
-            ->get();
-        
-        foreach ($years as $y) {
-            $y->count = DB::table('dt_product')
-                ->where('version_year', $y->year)
-                ->count();
-            
-            $y->is_published = DB::table('dt_product_year_control')
-                ->where('year', $y->year)
-                ->value('is_published') ?? 0;
+            ->groupBy('product_style');
+
+        $recordsTotal = DB::query()->fromSub($grouped, 'grouped_products')->count();
+
+        $query = DB::query()->fromSub($grouped, 'grouped_products');
+
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('product_style', 'like', "%{$searchValue}%")
+                    ->orWhere('factory_style', 'like', "%{$searchValue}%")
+                    ->orWhere('product_color', 'like', "%{$searchValue}%")
+                    ->orWhere('product_vendor_name', 'like', "%{$searchValue}%")
+                    ->orWhere('product_size_range', 'like', "%{$searchValue}%");
+            });
         }
-            
-        $allSubProducts = \App\Models\SubProduct::pluck('sub_product_name')->toArray();
-        return view('products.index', compact('products', 'allSubProducts', 'years'));
+
+        $recordsFiltered = (clone $query)->count();
+
+        if ($orderColumnIndex !== null && isset($sortableColumns[$orderColumnIndex])) {
+            $query->orderBy($sortableColumns[$orderColumnIndex], $orderDir);
+        } else {
+            $query->orderBy('product_style', 'asc');
+        }
+
+        if ($length != -1) {
+            $query->offset($start)->limit($length);
+        }
+
+        $rows = $query->get();
+
+        // Batch-load color variants for just the styles on this page,
+        // instead of running a query per row like the old Blade @foreach did.
+        $styles = $rows->pluck('product_style')->all();
+        $colorsByStyle = collect();
+        if (!empty($styles)) {
+            $colorsByStyle = Product::whereIn('product_style', $styles)
+                ->get(['product_ID', 'product_style', 'product_color', 'product_status'])
+                ->groupBy('product_style');
+        }
+
+        $canEdit = auth()->user()->admin_role === 'superadmin' || auth()->user()->user_name == 'admin1';
+
+        $data = [];
+        foreach ($rows as $row) {
+            $colors = $colorsByStyle->get($row->product_style, collect());
+
+            $colorOptions = '';
+            foreach ($colors as $c) {
+                $selected = $c->product_status ? 'selected' : '';
+                $colorOptions .= '<option ' . $selected . ' value="' . e($c->product_ID) . '" data-style="' . e($row->product_style) . '" data-colorId="' . e($c->product_ID) . '">'
+                    . strtoupper(e($c->product_color)) . '</option>';
+            }
+
+            $prodStatusNow = $colors->where('product_status', 1)->count();
+
+            $subProducts = '';
+            if (!empty($row->sub_products)) {
+                $decoded = json_decode($row->sub_products, true);
+                if (is_array($decoded)) {
+                    $subProducts = implode(', ', $decoded);
+                }
+            }
+
+            $actions = '';
+            if ($canEdit) {
+                $editUrl = route('products.edit', $row->product_ID);
+                $actionUrl = route('admin-products.action');
+
+                $actions .= '<a target="_self" class="btn btn-success mb-0 btn-sm edit_product btn-width" href="' . $editUrl . '">Edit</a>';
+                $actions .= '<form method="POST" action="' . $actionUrl . '" class="d-inline product-action-form">';
+                $actions .= csrf_field();
+                $actions .= '<input type="hidden" name="styleNumber" value="' . e($row->product_style) . '">';
+                $actions .= '<input type="submit" name="action" class="btn btn-danger mb-0 btn-sm btn-width" value="Delete">';
+
+                if ($prodStatusNow >= 1) {
+                    $actions .= '<input type="submit" name="action" class="btn btn-success mb-0 btn-sm btn-width" value="Active">';
+                } else {
+                    $actions .= '<input type="submit" name="action" class="btn btn-warning mb-0 btn-sm btn-width" value="Inactive">';
+                }
+
+                $disabled = $prodStatusNow >= 1 ? 'disabled' : '';
+                $checked = $row->inventory_override ? 'checked' : '';
+                $actions .= '<label><input type="checkbox" class="toggle-inventory-override" data-style="' . e($row->product_style) . '" ' . $checked . ' ' . $disabled . '> Show from Inventory</label>';
+                $actions .= '</form>';
+            }
+
+            $data[] = [
+                'checkbox' => '<input class="form-check-input" type="checkbox" value="' . e($row->product_style) . '" id="chk_' . e($row->product_style) . '" name="products[]"><label class="form-check-label" for="chk_' . e($row->product_style) . '"></label>',
+                'image' => '<div class="col-12 col-md-4 mx-auto" style="padding:0px;"><img src="' . e($row->product_image) . '" alt="" class="w-100 img-fluid zoom"></div>',
+                'style' => '<a target="_blank" href="' . e($row->product_link) . '">' . strtoupper(e($row->product_style)) . '</a>',
+                'factory_style' => strtoupper(e($row->factory_style)),
+                'color' => '<select class="js-select2 form-control select_color" name="select_color" multiple>' . $colorOptions . '</select>',
+                'sub_products' => e($subProducts),
+                'size_range' => e($row->product_size_range),
+                'cost' => e($row->product_cost),
+                'price' => e($row->product_wholesale_price),
+                'vendor' => strtoupper(e($row->product_vendor_name)),
+                'actions' => $actions,
+            ];
+        }
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
     }
 
     public function action(Request $request)
     {
-        // dd($request->all());
         $action = $request->input('action');
         $styleNumber = rtrim($request->input('styleNumber'), ' ');
         $id = $request->input('id');
 
         if ($styleNumber) {
+            $message = null;
+            $deleted = null;
+
             switch ($action) {
                 case 'Delete':
-                    Product::where('product_style', $styleNumber)->delete();
+                    $deleted = Product::where('product_style', $styleNumber)->delete();
+                    $message = $deleted
+                        ? "Product \"{$styleNumber}\" deleted successfully."
+                        : "Product \"{$styleNumber}\" was not found or could not be deleted.";
                     break;
                 case 'Active':
                     Product::where('product_style', $styleNumber)
                         ->update(['product_status' => 0]);
+                    $message = "Product \"{$styleNumber}\" marked inactive.";
                     break;
                 case 'Inactive':
                     Product::where('product_style', $styleNumber)
                         ->update(['product_status' => 1]);
+                    $message = "Product \"{$styleNumber}\" marked active.";
                     break;
+                default:
+                    return redirect()->route('products.index')
+                        ->with('error', 'Unknown action requested.');
             }
-            return redirect()->route('products.index');
+
+            $flashType = ($action === 'Delete' && !$deleted) ? 'error' : 'success';
+
+            return redirect()->route('products.index')
+                ->with($flashType, $message);
         } else {
             switch ($action) {
                 case 'Delete':
@@ -140,7 +287,6 @@ class ProductController extends Controller
             'version_year' => 'required|numeric',
         ]);
 
-        // Check if product already exists
         $existingProduct = Product::where('product_style', strtolower($validated['style']))
             ->where('product_color', strtolower($validated['color']))
             ->first();
@@ -151,10 +297,8 @@ class ProductController extends Controller
                 ->with('error', 'Product with this style and color already exists!');
         }
 
-        // Get vendor details
         $vendor = Vendor::findOrFail($validated['vendor_id']);
 
-        // Create new product
         Product::create([
             'product_style' => strtolower($validated['style']),
             'factory_style' => strtolower($validated['factory_style']),
@@ -175,46 +319,6 @@ class ProductController extends Controller
             ->with('success', 'Product added successfully!');
     }
 
-
-    // public function archive(Request $request)
-    // {
-    //     $validated = $request->validate([
-    //         'selectedItems' => 'required|array',
-    //         'selectedItems.*' => 'exists:dt_product,product_style',
-    //         'archiveName' => 'required|string|max:255'
-    //     ]);
-
-    //     \DB::transaction(function () use ($validated) {
-    //         // Get products to archive
-    //         $products = Product::whereIn('product_style', $validated['selectedItems'])->get();
-
-    //         // Create archive records
-    //         foreach ($products as $product) {
-    //             ProductArchive::create([
-    //                 'product_ID' => $product->product_ID,
-    //                 'product_style' => $product->product_style,
-    //                 'factory_style' => $product->factory_style,
-    //                 'product_color' => $product->product_color,
-    //                 'product_size_range' => $product->product_size_range,
-    //                 'product_cost' => $product->product_cost,
-    //                 'product_wholesale_price' => $product->product_wholesale_price,
-    //                 'product_vendor_ID' => $product->product_vendor_ID,
-    //                 'product_vendor_name' => $product->product_vendor_name,
-    //                 'product_link' => $product->product_link,
-    //                 'product_image' => $product->product_image,
-    //                 'sub_products' => $product->sub_products,
-    //                 'product_status' => 1, // Archived products are inactive
-    //                 'archive_name' => $validated['archiveName']
-    //             ]);
-    //         }
-
-    //         // Delete original products
-    //         Product::whereIn('product_style', $validated['selectedItems'])->delete();
-    //     });
-
-    //     return response()->json(['success' => true]);
-    // }
-    
     public function archive(Request $request)
     {
         $validated = $request->validate([
@@ -222,13 +326,13 @@ class ProductController extends Controller
             'selectedItems.*' => 'exists:dt_product,product_style',
             'archiveName' => 'required|string|max:255'
         ]);
-    
+
         \DB::transaction(function () use ($validated) {
-    
+
             $products = Product::whereIn('product_style', $validated['selectedItems'])->get();
-    
+
             foreach ($products as $product) {
-    
+
                 ProductArchive::create([
                     'product_ID' => $product->product_ID,
                     'product_style' => $product->product_style,
@@ -242,25 +346,23 @@ class ProductController extends Controller
                     'product_link' => $product->product_link,
                     'product_image' => $product->product_image,
                     'sub_products' => $product->sub_products,
-                    'version_year' => $product->version_year, // ADD THIS
+                    'version_year' => $product->version_year,
                     'product_status' => 1,
                     'archive_name' => $validated['archiveName']
                 ]);
             }
-    
+
             Product::whereIn('product_style', $validated['selectedItems'])->delete();
         });
-    
+
         return response()->json(['success' => true]);
     }
-
 
     public function edit($id)
     {
         $product = Product::findOrFail($id);
         $vendors = Vendor::all();
         $allSubProducts = \App\Models\SubProduct::pluck('sub_product_name')->toArray();
-        // Get all colors for this product style
         $colors = Product::where('product_style', $product->product_style)
             ->select('product_ID', 'product_color')
             ->get();
@@ -286,7 +388,6 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
         $vendor = Vendor::findOrFail($validated['vendor_id']);
 
-        // Update all products with the same style (main product and color variants)
         Product::where('product_style', $product->product_style)
             ->update([
                 'product_style' => $validated['style'],
@@ -323,10 +424,8 @@ class ProductController extends Controller
 
     public function download()
     {
-        // Get all products
         $products = Product::all();
 
-        // Prepare headers
         $headers = [
             "Product ID",
             "Style",
@@ -342,10 +441,8 @@ class ProductController extends Controller
             "Image"
         ];
 
-        // Prepare data array
         $data = [$headers];
 
-        // Add product data
         foreach ($products as $product) {
             $data[] = [
                 $product->product_ID,
@@ -363,10 +460,8 @@ class ProductController extends Controller
             ];
         }
 
-        // Generate filename with current date
         $filename = 'products_bkp_' . now()->format('Y-m-d_H-i-s') . '.xlsx';
 
-        // Generate and download XLSX
         return SimpleXLSXGen::fromArray($data)
             ->downloadAs($filename);
     }
@@ -376,159 +471,19 @@ class ProductController extends Controller
         $style = $request->input('style');
 
         $price = Product::where('product_style', $style)
-            ->value('product_wholesale_price'); // fetch only the column
+            ->value('product_wholesale_price');
 
-        return response()->json($price); // return as JSON
+        return response()->json($price);
     }
-    // public function index()
-    // {
-    //     // $products = Product::with(['variants', 'vendor'])
-    //     //             ->orderBy('style')
-    //     //             ->get();
-    //     $products = [];
-    //     return view('products.index',compact('products'));
-    // }
 
-    // public function create()
-    // {
-    //     $vendors = Vendor::all();
-    //     return view('admin.products.create', compact('vendors'));
-    // }
-
-    // public function store(Request $request)
-    // {
-    //     // Validation
-    //     $validated = $request->validate([
-    //         'style' => 'required|unique:products',
-    //         'image' => 'required|url',
-    //         'link' => 'required|url',
-    //         'size_range' => 'required',
-    //         'cost' => 'required|numeric',
-    //         'wholesale_price' => 'required|numeric',
-    //         'vendor_id' => 'required|exists:vendors,id',
-    //         'colors' => 'required|array',
-    //         'colors.*' => 'string'
-    //     ]);
-
-    //     // Create product
-    //     $product = Product::create($validated);
-
-    //     // Create variants
-    //     foreach ($request->colors as $color) {
-    //         $product->variants()->create([
-    //             'color' => $color,
-    //             'status' => 1
-    //         ]);
-    //     }
-
-    //     return redirect()->route('admin.products.index')
-    //         ->with('success', 'Product created successfully');
-    // }
-
-    // public function edit(ProductVariant $variant)
-    // {
-    //     $product = $variant->product;
-    //     $vendors = Vendor::all();
-    //     return view('admin.products.edit', compact('product', 'variant', 'vendors'));
-    // }
-
-    // public function update(Request $request, ProductVariant $variant)
-    // {
-    //     $validated = $request->validate([
-    //         'style' => 'required|unique:products,style,'.$variant->product_id,
-    //         'image' => 'required|url',
-    //         'link' => 'required|url',
-    //         'size_range' => 'required',
-    //         'cost' => 'required|numeric',
-    //         'wholesale_price' => 'required|numeric',
-    //         'vendor_id' => 'required|exists:vendors,id',
-    //         'color' => 'required|string'
-    //     ]);
-
-    //     $variant->product->update($validated);
-    //     $variant->update(['color' => $request->color]);
-
-    //     return redirect()->route('admin.products.index')
-    //         ->with('success', 'Product updated successfully');
-    // }
-
-    // public function destroy(Product $product)
-    // {
-    //     $product->delete();
-    //     return redirect()->back()->with('success', 'Product deleted successfully');
-    // }
-
-    // public function batchAction(Request $request)
-    // {
-    //     $action = $request->action;
-    //     $products = $request->products;
-
-    //     if (!$products) {
-    //         return redirect()->back()->with('error', 'No products selected');
-    //     }
-
-    //     switch ($action) {
-    //         case 'delete':
-    //             Product::whereIn('style', $products)->delete();
-    //             return redirect()->back()->with('success', 'Selected products deleted');
-
-    //         case 'activate':
-    //             ProductVariant::whereIn('product_id', 
-    //                 Product::whereIn('style', $products)->pluck('id')
-    //             )->update(['status' => 1]);
-    //             return redirect()->back()->with('success', 'Selected products activated');
-
-    //         case 'deactivate':
-    //             ProductVariant::whereIn('product_id', 
-    //                 Product::whereIn('style', $products)->pluck('id')
-    //             )->update(['status' => 0]);
-    //             return redirect()->back()->with('success', 'Selected products deactivated');
-
-    //         default:
-    //             return redirect()->back()->with('error', 'Invalid action');
-    //     }
-    // }
-
-    // public function updateVariantStatus(Request $request)
-    // {
-    //     $variant = ProductVariant::findOrFail($request->id);
-    //     $variant->update(['status' => $request->status]);
-
-    //     return response()->json(['success' => true]);
-    // }
-
-    // public function import(Request $request)
-    // {
-    //     $request->validate([
-    //         'file' => 'required|mimes:xls,xlsx'
-    //     ]);
-
-    //     Excel::import(new ProductsImport, $request->file('file'));
-
-    //     return redirect()->back()->with('success', 'Products imported successfully');
-    // }
-
-    // public function export()
-    // {
-    //     return Excel::download(new ProductsExport, 'products.xlsx');
-    // }
-
-    // public function archive(Request $request)
-    // {
-    //     // Implement your archive logic here
-    //     // This would typically create an archive record and update product statuses
-
-    //     return response()->json(['success' => true]);
-    // }
-    
     public function toggleInventory(Request $request)
     {
         Product::where('product_style', $request->style)
             ->update(['show_from_inventory' => $request->status]);
-    
+
         return response()->json(['success' => true]);
     }
-    
+
     public function toggleYear(Request $request)
     {
         DB::table('dt_product_year_control')
@@ -539,9 +494,9 @@ class ProductController extends Controller
                     'updated_at' => now()
                 ]
             );
-    
+
         $isPublished = (int) $request->status === 1;
-    
+
         return response()->json([
             'success' => true,
             'year' => $request->year,

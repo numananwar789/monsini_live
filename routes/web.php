@@ -78,14 +78,16 @@ Route::middleware('auth')->group(function () {
         ->name('products.archive');
     Route::post('/products/update-color', [ProductController::class, 'updateColor'])->name('products.update.color');
 
+    Route::get('/products/datatable', [ProductController::class, 'getProductsData'])
+        ->name('admin-products.datatable');
     Route::resource('products', ProductController::class);
     Route::post('/admin-products/toggle-inventory', [ProductController::class, 'toggleInventory'])
-    ->name('admin-products.toggle-inventory');
-    
+        ->name('admin-products.toggle-inventory');
+
     Route::post('/admin-products/toggle-year', [ProductController::class, 'toggleYear'])
-    ->name('admin-products.toggle-year');
-    
-    
+        ->name('admin-products.toggle-year');
+
+
     Route::resource('users', UserController::class);
     Route::resource('product-archives', ProductArchiveController::class)->only(['index']);
     Route::post('product-archives/restore', [ProductArchiveController::class, 'restore'])->name('product-archives.restore');
@@ -185,7 +187,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/inventory/get-colors2', [InventoryController::class, 'getColors'])->name('inventory.get-colors2');
     Route::get('/inventory/get-products/{style}', [InventoryController::class, 'getSubProducts'])->name('inventory.get-products');
     Route::get('/refresh-final-orders', [OrderFinalController::class, 'refresh'])
-    ->name('final-orders.refresh');
+        ->name('final-orders.refresh');
 
     Route::resource('/final-orders', OrderFinalController::class);
 
@@ -242,7 +244,7 @@ Route::prefix('admin')->middleware(['auth', 'admin'])->group(function () {
 
 
 Route::prefix('customer')->middleware(['auth'])->group(function () {
-   
+
 
     Route::get('/products', [CustProductController::class, 'index'])->name('customer.products.index');
     Route::post('/products', [CustProductController::class, 'store'])->name('customer.products.store');

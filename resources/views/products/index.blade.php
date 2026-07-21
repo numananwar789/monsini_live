@@ -14,19 +14,19 @@
         .zoom:hover {
             transform: scale(1.5);
         }
-        
-.dropdown-scroll {
-    max-height: 300px;
-    overflow-y: auto;
-}
 
-.dropdown-scroll > div {
-    padding: 12px;
-}
+        .dropdown-scroll {
+            max-height: 300px;
+            overflow-y: auto;
+        }
 
-.dropdown-scroll .d-flex {
-    padding: 8px 4px;
-}
+        .dropdown-scroll>div {
+            padding: 12px;
+        }
+
+        .dropdown-scroll .d-flex {
+            padding: 8px 4px;
+        }
     </style>
 @endsection
 
@@ -62,149 +62,32 @@
                                                             all the entries</b></label>
                                                     <input type="checkbox" name="check-all" id="check-all" class="ml-2">
                                                 </div>
-                                               
-                                                    <table id="example" class="table table-striped table-bordered"
-                                                        style="width:100%">
-                                                        <thead>
-                                                            <tr>
-                                                                <th>Check</th>
-                                                                <th>Image</th>
-                                                                <th>Style</th>
-                                                                <th>F. Style</th>
-                                                                <th>Color</th>
-                                                                <th>Sub Products</th>
-                                                                <th>Size Range</th>
-                                                                <th>Total Cost</th>
-                                                                <th>Total Price</th>
-                                                                <th>Vendor</th>
-                                                                @if (auth()->user()->admin_role === 'superadmin' || auth()->user()->user_name == 'admin1')
-                                                                    <th style="width: 175px!important;">Edit/Delete</th>
-                                                                @endif
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
 
-                                                            @foreach ($products as $product)
-                                                                @php
-                                                                    $prodStatusNow = \App\Models\Product::where(
-                                                                        'product_style',
-                                                                        $product->product_style,
-                                                                    )
-                                                                        ->where('product_status', 1)
-                                                                        ->count();
-                                                                @endphp
-                                                             
-                                                                    <tr>
-                                                                        <td style="text-align: center;vertical-align: middle;">
-                                                                            <input class="form-check-input" type="checkbox"
-                                                                                value="{{ $product->product_style }}"
-                                                                                id="{{ $product->product_style }}"
-                                                                                name="products[]">
-                                                                            <label class="form-check-label"
-                                                                                for="{{ $product->product_style }}"></label>
-                                                                        </td>
-                                                                        <td>
-                                                                            <div class="col-12 col-md-4 mx-auto"
-                                                                                style="padding:0px;">
-                                                                                <img src="{{ $product->product_image }}"
-                                                                                    alt="" class="w-100 img-fluid zoom">
-                                                                            </div>
-                                                                        </td>
-                                                                        <td>
-                                                                            <a target="_blank"
-                                                                                href="{{ $product->product_link }}">
-                                                                                {{ strtoupper($product->product_style) }}</a>
-                                                                        </td>
+                                                <table id="example" class="table table-striped table-bordered"
+                                                    style="width:100%">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Check</th>
+                                                            <th>Image</th>
+                                                            <th>Style</th>
+                                                            <th>F. Style</th>
+                                                            <th>Color</th>
+                                                            <th>Sub Products</th>
+                                                            <th>Size Range</th>
+                                                            <th>Total Cost</th>
+                                                            <th>Total Price</th>
+                                                            <th>Vendor</th>
+                                                            @if (auth()->user()->admin_role === 'superadmin' || auth()->user()->user_name == 'admin1')
+                                                                <th style="width: 175px!important;">Edit/Delete</th>
+                                                            @endif
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {{-- Rows are now loaded via AJAX by DataTables (serverSide),
+                                                             see the getProductsData() endpoint. Nothing rendered here. --}}
+                                                    </tbody>
+                                                </table>
 
-                                                                        <td>
-                                                                            {{ strtoupper($product->factory_style) }}
-                                                                        </td>
-
-                                                                        <td style="min-width: 20em;">
-                                                                            @php
-                                                                                $colors = \App\Models\Product::where(
-                                                                                    'product_style',
-                                                                                    $product->product_style,
-                                                                                )->get();
-                                                                            @endphp
-                                                                            <select class="js-select2 form-control select_color"
-                                                                                name="select_color" multiple>
-                                                                                @foreach ($colors as $color)
-                                                                                    <option
-                                                                                        {{ $color->product_status ? 'selected' : '' }}
-                                                                                        value="{{ $color->product_ID }}"
-                                                                                        data-style="{{ $product->product_style }}"
-                                                                                        data-colorId="{{ $color->product_ID }}">
-                                                                                        {{ strtoupper($color->product_color) }}
-                                                                                    </option>
-                                                                                @endforeach
-                                                                            </select>
-                                                                        </td>
-
-                                                                        <td>{{ implode(', ', $product->sub_products ?? []) }}</td>
-                                                                        <td>{{ $product->product_size_range }}</td>
-                                                                        <td>{{ $product->product_cost }}</td>
-                                                                        <td>{{ $product->product_wholesale_price }}</td>
-                                                                        <td>{{ strtoupper($product->product_vendor_name) }}
-                                                                        </td>
-                                                                        @if (auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1')
-                                                                            <td class="text-center d-flex flex-wrap">
-                                                                                <a target="_self"
-                                                                                    id="edit_page_url{{ $product->product_style }}"
-                                                                                    class="btn btn-success mb-0 btn-sm edit_product btn-width"
-                                                                                    href="{{ route('products.edit', $product->product_ID) }}">
-                                                                                    Edit
-                                                                                </a>
-                                                                                    <form id="productForm" method="POST"
-                                                                                        action="{{ route('admin-products.action') }}">
-                                                                                        @csrf
-                                                                                        <input type="text" style="display:none"
-                                                                                            name="prodID"
-                                                                                            value="{{ $product->product_style }}">
-
-                                                                                        <input type="submit" name="action"
-                                                                                            class="btn btn-danger mb-0 btn-sm btn-width"
-                                                                                            value="Delete" />
-
-                                                                                        @if ($prodStatusNow >= 1)
-                                                                                            <input type="submit" name="action"
-                                                                                                class="btn btn-success mb-0 btn-sm btn-width"
-                                                                                                value="Active" />
-                                                                                        @elseif($prodStatusNow == 0)
-                                                                                            <input type="submit" name="action"
-                                                                                                class="btn btn-warning mb-0 btn-sm btn-width"
-                                                                                                value="Inactive" />
-                                                                                        @endif
-                                                                                        
-                                                                                        <!--<label>-->
-                                                                                        <!--    <input type="checkbox" class="toggle-inventory-override"-->
-                                                                                        <!--        data-style="{{ $product->product_style }}"-->
-                                                                                        <!--        {{ $product->inventory_override ? 'checked' : '' }}>-->
-                                                                                        <!--    Show from Inventory-->
-                                                                                        <!--</label>-->
-                                                                                        
-                                                                                        <label>
-                                                                                            <input type="checkbox"
-                                                                                                class="toggle-inventory-override"
-                                                                                                data-style="{{ $product->product_style }}"
-                                                                                                {{ $product->inventory_override ? 'checked' : '' }}
-                                                                                                {{ $prodStatusNow >= 1 ? 'disabled' : '' }}>
-                                                                                            Show from Inventory
-                                                                                        </label>
-
-                                                                                        <input name="styleNumber"
-                                                                                            value="{{ $product->product_style }}"
-                                                                                            hidden />
-
-                                                                                     </form>
-                                                                            </td>
-                                                                        @endif
-                                                                    </tr>
-                                                               
-                                                            @endforeach
-                                                        </tbody>
-                                                    </table>
-                                           
                                             </div>
                                         </div>
                                     </div>
@@ -222,88 +105,77 @@
                                                 class="btn btn-warning float-right" data-toggle="modal"
                                                 data-target="#archiveModal">Archive Data</button>
 
-                                                <a href="{{ route('sub-products.index') }}"
+                                            <a href="{{ route('sub-products.index') }}"
                                                 class="btn btn-success float-right">Sub Products</a>
                                         </div>
                                     @endif
-                                    
-                                    
-<hr>
-
-<h5 class="mt-4 mb-3">Year Publishing Control</h5>
-
-<div class="dropdown">
-
-    <button class="btn btn-outline-primary dropdown-toggle"
-        type="button"
-        id="yearDropdown"
-        data-toggle="dropdown"
-        aria-expanded="false">
-
-        Manage Year Publishing
-
-    </button>
-
-    <div class="dropdown-menu p-3"
-        aria-labelledby="yearDropdown"
-        style="min-width: 350px;">
 
 
-<div class="dropdown-scroll">
-        @foreach($years as $year)
+                                    <hr>
 
-            <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5 class="mt-4 mb-3">Year Publishing Control</h5>
 
-                <div>
-                    <strong>Azure {{ $year->year }}</strong>
-                    <br>
+                                    <div class="dropdown">
 
-                    <small class="text-muted">
-                        {{ $year->count }} Products
-                    </small>
-                </div>
+                                        <button class="btn btn-outline-primary dropdown-toggle" type="button"
+                                            id="yearDropdown" data-toggle="dropdown" aria-expanded="false">
 
-                <div class="text-right">
+                                            Manage Year Publishing
 
-                    @if($year->is_published)
+                                        </button>
 
-                        <span class="badge badge-success mb-1">
-                            Published
-                        </span>
+                                        <div class="dropdown-menu p-3" aria-labelledby="yearDropdown"
+                                            style="min-width: 350px;">
 
-                    @else
 
-                        <span class="badge badge-secondary mb-1">
-                            Hidden
-                        </span>
+                                            <div class="dropdown-scroll">
+                                                @foreach ($years as $year)
+                                                    <div class="d-flex justify-content-between align-items-center mb-3">
 
-                    @endif
+                                                        <div>
+                                                            <strong>Azure {{ $year->year }}</strong>
+                                                            <br>
 
-                    <br>
+                                                            <small class="text-muted">
+                                                                {{ $year->count }} Products
+                                                            </small>
+                                                        </div>
 
-                    <label class="mb-0">
+                                                        <div class="text-right">
 
-                        <input type="checkbox"
-                            class="toggle-year-checkbox"
-                            data-year="{{ $year->year }}"
-                            {{ $year->is_published ? 'checked' : '' }}>
+                                                            @if ($year->is_published)
+                                                                <span class="badge badge-success mb-1">
+                                                                    Published
+                                                                </span>
+                                                            @else
+                                                                <span class="badge badge-secondary mb-1">
+                                                                    Hidden
+                                                                </span>
+                                                            @endif
 
-                        Publish
+                                                            <br>
 
-                    </label>
+                                                            <label class="mb-0">
 
-                </div>
+                                                                <input type="checkbox" class="toggle-year-checkbox"
+                                                                    data-year="{{ $year->year }}"
+                                                                    {{ $year->is_published ? 'checked' : '' }}>
 
-            </div>
+                                                                Publish
 
-            @if(!$loop->last)
-                <div class="dropdown-divider"></div>
-            @endif
+                                                            </label>
 
-        @endforeach
-</div>
-    </div>
-</div>
+                                                        </div>
+
+                                                    </div>
+
+                                                    @if (!$loop->last)
+                                                        <div class="dropdown-divider"></div>
+                                                    @endif
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <!-- Import Modal -->
                                     <div class="modal fade" id="importModal" tabindex="-1" role="dialog"
@@ -323,9 +195,8 @@
                                                     <div class="modal-body">
                                                         <div class="form-group">
                                                             <label for="productFile">Upload File</label>
-                                                            <input name="file" type="file"
-                                                                class="form-control-file" id="productFile"
-                                                                accept=".xls,.xlsx" required>
+                                                            <input name="file" type="file" class="form-control-file"
+                                                                id="productFile" accept=".xls,.xlsx" required>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
@@ -378,14 +249,10 @@
 @endsection
 
 @section('page-js')
-    <!-- <script src="assets/js/vendor-all.min.js"></script> -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+    <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
 
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-
-<script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
-
-    {{-- <script src="/assets/js/pcoded.min.js"></script> --}}
     <!-- amchart js -->
     <script src="/assets/plugins/amchart/js/amcharts.js"></script>
     <script src="/assets/plugins/amchart/js/gauge.js"></script>
@@ -405,8 +272,6 @@
     <script src="/assets/plugins/datatable/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.4/js/select2.min.js"></script>
 
-    <!-- datatable date range links -->
-    <!-- <script src="https://code.jquery.com/jquery-3.5.1.js"></script> -->
     <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.2/moment.min.js"></script>
     <script src="https://cdn.datatables.net/datetime/1.1.2/js/dataTables.dateTime.min.js"></script>
@@ -415,15 +280,6 @@
 
     <!-- toastr -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/js/toastr.min.js"></script>
-
-
-    {{-- <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.2/moment.min.js"></script>
-<script src="https://cdn.datatables.net/datetime/1.1.2/js/dataTables.dateTime.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.print.min.js"></script>
-<script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/js/toastr.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.4/js/select2.min.js"></script> --}}
 
     <script>
         function xpandTable() {
@@ -447,16 +303,14 @@
             $('.myClass').trigger('keyup');
             table.page.len(-1).draw();
 
-            // Create an array to store the selected values
             var selectedItems = [];
             $('input[name="products[]"]:checked').each(function() {
                 selectedItems.push($(this).val());
             });
 
-            //get archive name
             var archiveName = $('#archive-name').val();
             var token = $('meta[name="csrf-token"]').attr('content');
-            // Make an AJAX request to the PHP script
+
             $.ajax({
                 url: '/products/archive',
                 type: 'POST',
@@ -466,26 +320,146 @@
                 data: {
                     selectedItems: selectedItems,
                     archiveName: archiveName
-
                 },
                 success: function(response) {
                     alert("Archived Successfully!")
                     window.location.reload();
-                    // console.log(response);
-                    // Perform any additional actions or update the UI as needed
                 },
                 error: function(xhr, status, error) {
-                    // Handle the error scenario if the AJAX request fails
-                    // console.log(xhr.responseText);
                     alert(xhr.responseText);
                 }
             });
         }
 
+        // Re-attach select2 activate/deactivate handlers. Delegated on
+        // document so it works for rows injected by DataTables' ajax draw.
+        function bindSelect2Handlers() {
+            $('.js-select2').on('select2:select', function(e) {
+                var prodID = e.params.data.id;
+                var colorProd = e.params.data.text;
+
+                $.ajax({
+                    url: "{{ route('admin-products.action') }}",
+                    method: 'POST',
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        id: prodID,
+                        action: "Active"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.success('Color ' + colorProd + ' has been activated',
+                                'Activated', {
+                                    progressBar: true,
+                                    closeHtml: '<button type="button">&times;</button>',
+                                    newestOnTop: true,
+                                });
+                        }
+                    }
+                });
+            });
+
+            $('.js-select2').on('select2:unselect', function(e) {
+                var prodID = e.params.data.id;
+                var colorProd = e.params.data.text;
+
+                $.ajax({
+                    url: "{{ route('admin-products.action') }}",
+                    method: 'POST',
+                    data: {
+                        _token: "{{ csrf_token() }}",
+                        id: prodID,
+                        action: "Inactive"
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            toastr.error('Color ' + colorProd + ' has been de-activated',
+                                'Deactivated', {
+                                    progressBar: true,
+                                    closeHtml: '<button type="button">&times;</button>',
+                                    newestOnTop: true,
+                                });
+                        }
+                    }
+                });
+            });
+        }
 
         $(document).ready(function() {
-            // Initialize DataTable
+
+            var canEdit =
+                {{ auth()->user()->admin_role === 'superadmin' || auth()->user()->user_name == 'admin1' ? 'true' : 'false' }};
+
+            var columns = [{
+                    data: 'checkbox',
+                    name: 'checkbox',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    data: 'image',
+                    name: 'image',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    data: 'style',
+                    name: 'product_style'
+                },
+                {
+                    data: 'factory_style',
+                    name: 'factory_style'
+                },
+                {
+                    data: 'color',
+                    name: 'product_color',
+                    orderable: false
+                },
+                {
+                    data: 'sub_products',
+                    name: 'sub_products',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    data: 'size_range',
+                    name: 'product_size_range'
+                },
+                {
+                    data: 'cost',
+                    name: 'product_cost'
+                },
+                {
+                    data: 'price',
+                    name: 'product_wholesale_price'
+                },
+                {
+                    data: 'vendor',
+                    name: 'product_vendor_name'
+                },
+            ];
+
+            if (canEdit) {
+                columns.push({
+                    data: 'actions',
+                    name: 'actions',
+                    orderable: false,
+                    searchable: false
+                });
+            }
+
+            // Initialize DataTable with server-side processing.
+            // Rows, paging, search, and sorting are now all handled
+            // by the getProductsData() endpoint instead of being
+            // rendered up-front for every product on page load.
             table = $('#example').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: "{{ route('admin-products.datatable') }}",
+                    type: 'GET'
+                },
+                columns: columns,
                 aLengthMenu: [
                     [10, 25, 50, 100, 200, -1],
                     [10, 25, 50, 100, 200, "All"]
@@ -523,98 +497,33 @@
 
                         head.appendChild(style);
                     }
-                }]
-            });
-
-            // Initialize Select2
-            function initSelect2() {
-                $(".js-select2").select2({
-                    closeOnSelect: false,
-                    placeholder: "Colors",
-                    allowHtml: true,
-                    allowClear: true,
-                    tags: false
-                });
-
-
-                // Activate/deactivate products via AJAX
-                $('.js-select2').on('select2:select', function(e) {
-                    var prodID = e.params.data.id;
-                    var colorProd = e.params.data.text;
-
-                    $.ajax({
-                        url: "{{ route('admin-products.action') }}",
-                        method: 'POST',
-                        data: {
-                            _token: "{{ csrf_token() }}",
-                            id: prodID,
-                            action: "Active"
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                toastr.success('Color ' + colorProd + ' has been activated',
-                                    'Activated', {
-                                        progressBar: true,
-                                        closeHtml: '<button type="button">&times;</button>',
-                                        newestOnTop: true,
-                                    });
-                            }
-                        }
+                }],
+                drawCallback: function() {
+                    $(".js-select2").select2({
+                        closeOnSelect: false,
+                        placeholder: "Colors",
+                        allowHtml: true,
+                        allowClear: true,
+                        tags: false
                     });
-                });
-
-                $('.js-select2').on('select2:unselect', function(e) {
-                    var prodID = e.params.data.id;
-                    var colorProd = e.params.data.text;
-
-                    $.ajax({
-                        url: "{{ route('admin-products.action') }}",
-                        method: 'POST',
-                        data: {
-                            _token: "{{ csrf_token() }}",
-                            id: prodID,
-                            action: "Inactive"
-                        },
-                        success: function(response) {
-                            if (response.success) {
-                                toastr.error('Color ' + colorProd + ' has been de-activated',
-                                    'Deactivated', {
-                                        progressBar: true,
-                                        closeHtml: '<button type="button">&times;</button>',
-                                        newestOnTop: true,
-                                    });
-                            }
-                        }
-                    });
-                });
-            }
-
-            // Run once on document ready
-            initSelect2();
-
-            table.on('draw.dt', function () {
-                 console.log("On Sort");
-                initSelect2();
-            });
-
-            // Check all functionality
-            $('#check-all').click(function(event) {
-                if (this.checked) {
-                    $(':checkbox').each(function() {
-                        this.checked = true;
-                    });
-                } else {
-                    $(':checkbox').each(function() {
-                        this.checked = false;
-                    });
+                    bindSelect2Handlers();
                 }
             });
-            
-            $(document).on('change', '.toggle-inventory-override', function () {
+
+            // Check all functionality — only affects checkboxes currently
+            // rendered on the page (the DataTables-standard behaviour).
+            $('#check-all').click(function(event) {
+                var checked = this.checked;
+                $('input[name="products[]"]').each(function() {
+                    this.checked = checked;
+                });
+            });
+
+            $(document).on('change', '.toggle-inventory-override', function() {
 
                 let style = $(this).data('style');
                 let status = $(this).is(':checked') ? 1 : 0;
-            
+
                 $.ajax({
                     url: "{{ route('admin-products.toggle-inventory') }}",
                     method: "POST",
@@ -623,107 +532,70 @@
                         style: style,
                         status: status
                     },
-                    success: function (response) {
-            
+                    success: function(response) {
+
                         if (status === 1) {
                             toastr.success('Show from Inventory enabled');
                         } else {
                             toastr.warning('Show from Inventory disabled');
                         }
-            
+
                     },
-                    error: function () {
+                    error: function() {
                         toastr.error('Something went wrong');
                     }
                 });
-            
+
             });
         });
-        
-    //   $(document).on('click', '.toggle-year', function () {
-        
-    //         let btn = $(this);
-    //         let year = btn.data('year');
-    //         let status = btn.data('status');
-        
-    //         console.log("Year Clicked:", year, status);
-        
-    //         btn.prop('disabled', true);
-        
-    //         $.ajax({
-    //             url: "{{ route('admin-products.toggle-year') }}",
-    //             method: "POST",
-    //             data: {
-    //                 _token: "{{ csrf_token() }}",
-    //                 year: year,
-    //                 status: status
-    //             },
-    //             success: function (res) {
-        
-    //                 toastr.success(res.message);
-                    
-    //                 setTimeout(() => {
-    //                     location.reload();
-    //                 }, 500);
-    //             },
-    //             error: function (xhr) {
-        
-    //                 console.log("ERROR:", xhr.responseText);
-        
-    //                 toastr.error('Failed to update year status');
-        
-    //                 btn.prop('disabled', false);
-    //             }
-    //         });
-    //     });
-    
-    $(document).on('change', '.toggle-year-checkbox', function () {
 
-    let checkbox = $(this);
+        $(document).on('change', '.toggle-year-checkbox', function() {
 
-    let year = checkbox.data('year');
+            let checkbox = $(this);
 
-    let status = checkbox.is(':checked') ? 1 : 0;
+            let year = checkbox.data('year');
 
-    $.ajax({
-        url: "{{ route('admin-products.toggle-year') }}",
-        method: "POST",
-        data: {
-            _token: "{{ csrf_token() }}",
-            year: year,
-            status: status
-        },
+            let status = checkbox.is(':checked') ? 1 : 0;
 
-        success: function (res) {
+            $.ajax({
+                url: "{{ route('admin-products.toggle-year') }}",
+                method: "POST",
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    year: year,
+                    status: status
+                },
 
-            toastr.success(res.message);
+                success: function(res) {
 
-            let badge = checkbox.closest('.text-right').find('.badge');
+                    toastr.success(res.message);
 
-            if (status === 1) {
+                    let badge = checkbox.closest('.text-right').find('.badge');
 
-                badge
-                    .removeClass('badge-secondary')
-                    .addClass('badge-success')
-                    .text('Published');
+                    if (status === 1) {
 
-            } else {
+                        badge
+                            .removeClass('badge-secondary')
+                            .addClass('badge-success')
+                            .text('Published');
 
-                badge
-                    .removeClass('badge-success')
-                    .addClass('badge-secondary')
-                    .text('Hidden');
-            }
-        },
+                    } else {
 
-        error: function () {
+                        badge
+                            .removeClass('badge-success')
+                            .addClass('badge-secondary')
+                            .text('Hidden');
+                    }
+                },
 
-            toastr.error('Failed to update year status');
+                error: function() {
 
-            checkbox.prop('checked', !status);
-        }
-    });
+                    toastr.error('Failed to update year status');
 
-});
+                    checkbox.prop('checked', !status);
+                }
+            });
+
+        });
     </script>
 @endsection
