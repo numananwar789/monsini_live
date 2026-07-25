@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-    <title>Monsini - Signin</title>
+    <title>Monsini - Login</title>
     <!-- HTML5 Shim and Respond.js IE10 support of HTML5 elements and media queries -->
     <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
     <!--[if lt IE 10]>
@@ -19,7 +19,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- Favicon icon -->
-    <link rel="icon" href="/assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/assets/images/monsiniprom-logo.png" type="image/x-icon">
     <!-- fontawesome icon -->
     <link rel="stylesheet" href="{{ asset('assets/fonts/fontawesome/css/fontawesome-all.min.css') }}">
     <!-- animation css -->
@@ -68,12 +68,16 @@
 
 <body>
     <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-light static-top py-3" id="navbar-font" style="box-shadow: 0px 10px 10px -11px rgb(101 100 219 / 63%);">
+    <nav class="navbar navbar-expand-lg navbar-light bg-light static-top py-3" id="navbar-font"
+        style="box-shadow: 0px 10px 10px -11px rgb(101 100 219 / 63%);">
         <div class="container">
             <a class="" href="https://monsiniprom.com/">
-                <img src="https://monsiniprom.com/wp-content/uploads/2022/06/monsini-transparent-logo.png" alt="..." height="70">
+                <img src="https://monsiniprom.com/wp-content/uploads/2022/06/monsini-transparent-logo.png"
+                    alt="..." height="70">
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+                data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false"
+                aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse justify-content-end" id="navbarSupportedContent">
@@ -83,32 +87,41 @@
                     </li>
 
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
                             Prom Collections
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="https://monsinidress.com/prom/2025">2025 Collection</a></li>
-                            <li><a class="dropdown-item" href="https://monsinidress.com/prom/2026">2026 Collection</a></li>
+                            <li><a class="dropdown-item" href="https://monsinidress.com/prom/2025">2025 Collection</a>
+                            </li>
+                            <li><a class="dropdown-item" href="https://monsinidress.com/prom/2026">2026 Collection</a>
+                            </li>
                         </ul>
                     </li>
-                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
                             Bridal Collections
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="https://monsiniprom.com/bridal/2025">2025 Collection</a></li>
-                            <li><a class="dropdown-item" href="https://monsiniprom.com/bridal/2026">2026 Collection</a></li>
+                            <li><a class="dropdown-item" href="https://monsiniprom.com/bridal/2025">2025 Collection</a>
+                            </li>
+                            <li><a class="dropdown-item" href="https://monsiniprom.com/bridal/2026">2026 Collection</a>
+                            </li>
                         </ul>
                     </li>
-                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                            data-bs-toggle="dropdown" aria-expanded="false">
                             Enchanted Evening
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="navbarDropdown">
-                            <li><a class="dropdown-item" href="https://monsiniprom.com/evening/2025">2025 Collection</a></li>
-                            <li><a class="dropdown-item" href="https://monsiniprom.com/evening/2026">2026 Collection</a></li>
+                            <li><a class="dropdown-item" href="https://monsiniprom.com/evening/2025">2025 Collection</a>
+                            </li>
+                            <li><a class="dropdown-item" href="https://monsiniprom.com/evening/2026">2026 Collection</a>
+                            </li>
                         </ul>
-                    </li>                    
+                    </li>
 
                     <!--<li class="nav-item">-->
                     <!--    <a class="nav-link" aria-current="page" href="https://monsinidress.com/prom/2025">Bridal Collections</a>-->
@@ -120,7 +133,8 @@
                         <a class="nav-link" aria-current="page" href="https://monsiniprom.com/contact">Contact us</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" aria-current="page" href="{{ route('register.customer.get') }}">Retailer Registration</a>
+                        <a class="nav-link" aria-current="page" href="{{ route('register.customer.get') }}">Retailer
+                            Registration</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('login') }}">Retailer Login</a>
@@ -129,7 +143,7 @@
             </div>
         </div>
     </nav>
-    
+
     <div class="auth-wrapper">
         <div class="auth-content">
             <div class="auth-bg">
@@ -138,10 +152,10 @@
                 <span class="r s"></span>
                 <span class="r"></span>
             </div>
-            
+
             <!-- Session Status -->
             <x-auth-session-status class="mb-4" :status="session('status')" />
-            
+
             <form method="POST" id="login-form" action="{{ route('login') }}">
                 @csrf
                 <div class="card">
@@ -150,42 +164,48 @@
                             <i class="feather icon-unlock auth-icon"></i>
                         </div>
                         <h3 class="mb-4">Login</h3>
-                        
+
                         <!-- Username/Email -->
                         <div class="input-group mb-3">
-                            <input type="text" id="email" name="email" class="form-control" placeholder="Username or Email" value="{{ old('email') }}" required autofocus>
+                            <input type="text" id="email" name="email" class="form-control"
+                                placeholder="Username or Email" value="{{ old('email') }}" required autofocus>
                         </div>
                         @error('email')
                             <div class="alert alert-danger text-center py-1 my-2">
                                 <strong>{{ $message }}</strong>
                             </div>
                         @enderror
-                        
+
                         <!-- Password -->
                         <div class="input-group mb-4">
-                            <input type="password" id="password" name="password" class="form-control" placeholder="Password" required>
+                            <input type="password" id="password" name="password" class="form-control"
+                                placeholder="Password" required>
                         </div>
                         @error('password')
                             <div class="alert alert-danger text-center py-1 my-2">
                                 <strong>{{ $message }}</strong>
                             </div>
                         @enderror
-                        
+
                         <!-- Remember Me -->
                         <div class="form-group text-left">
                             <div class="checkbox checkbox-fill d-inline">
-                                <input type="checkbox" name="remember" id="remember_me" {{ old('remember') ? 'checked' : '' }}>
+                                <input type="checkbox" name="remember" id="remember_me"
+                                    {{ old('remember') ? 'checked' : '' }}>
                                 <label for="remember_me" class="cr"> Save credentials</label>
                             </div>
                         </div>
-                        
-                        <button type="submit" onclick="handleLoginClick(event)" class="btn btn-primary shadow-2 mb-4">Login</button>
-                        
+
+                        <button type="submit" onclick="handleLoginClick(event)"
+                            class="btn btn-primary shadow-2 mb-4">Login</button>
+
                         @if (Route::has('custom.password.request'))
-                            <p class="mb-2 text-muted">Forgot password? <a href="{{ route('custom.password.request') }}">Reset</a></p>
+                            <p class="mb-2 text-muted">Forgot password? <a
+                                    href="{{ route('custom.password.request') }}">Reset</a></p>
                         @endif
-                        
-                        <p class="mb-0 text-muted">Don't have an account? <a href="{{ route('register.customer.get') }}">Signup</a></p>
+
+                        <p class="mb-0 text-muted">Don't have an account? <a
+                                href="{{ route('register.customer.get') }}">Signup</a></p>
                     </div>
                 </div>
             </form>
@@ -212,11 +232,12 @@
         }
 
         // Optional: disable auto-submit via autocomplete
-        document.getElementById('login-form').addEventListener('submit', function (e) {
+        document.getElementById('login-form').addEventListener('submit', function(e) {
             if (submitted) return;
             submitted = true;
         });
     </script>
 
 </body>
+
 </html>
