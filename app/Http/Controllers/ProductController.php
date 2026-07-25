@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\ImportValidationException;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\ProductArchive;
@@ -24,20 +25,27 @@ class ProductController extends Controller
         // its rows via AJAX from getProductsData() using server-side
         // DataTables processing, so we don't pull every product on page load.
 
+        // Get all years
         $years = DB::table('dt_product')
             ->select('version_year as year')
             ->groupBy('version_year')
-            ->orderBy('version_year', 'desc')
+            ->orderByDesc('version_year')
             ->get();
 
-        foreach ($years as $y) {
-            $y->count = DB::table('dt_product')
-                ->where('version_year', $y->year)
-                ->count();
+        // Get product counts per year (same logic as products query)
+        $yearCounts = DB::table('dt_product')
+            ->selectRaw('version_year, COUNT(DISTINCT product_style) as count')
+            ->groupBy('version_year')
+            ->pluck('count', 'version_year');
 
-            $y->is_published = DB::table('dt_product_year_control')
-                ->where('year', $y->year)
-                ->value('is_published') ?? 0;
+        // Get publish status for all years
+        $publishedYears = DB::table('dt_product_year_control')
+            ->pluck('is_published', 'year');
+
+        // Attach count & publish status
+        foreach ($years as $year) {
+            $year->count = $yearCounts[$year->year] ?? 0;
+            $year->is_published = $publishedYears[$year->year] ?? 0;
         }
 
         $allSubProducts = \App\Models\SubProduct::pluck('sub_product_name')->toArray();
@@ -249,17 +257,14 @@ class ProductController extends Controller
 
     public function import(Request $request)
     {
-        $request->validate([
-            'file' => 'required|mimes:xls,xlsx'
-        ]);
-
         try {
-            Excel::import(new ProductsImport, $request->file('file'));
-            return redirect()->route('products.index')
-                ->with('success', 'Products imported successfully.');
-        } catch (\Exception $e) {
-            return redirect()->back()
-                ->with('error', 'Error importing products: ' . $e->getMessage());
+            Excel::import(new ProductsImport(), $request->file('file'));
+
+            return back()->with('success', 'Products imported successfully.');
+        } catch (ImportValidationException $e) {
+            return back()->with('import_errors', $e->errorLines());
+        } catch (\Throwable $e) {
+            return back()->with('error', $e->getMessage());
         }
     }
 

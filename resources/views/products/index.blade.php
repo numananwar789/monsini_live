@@ -53,6 +53,17 @@
                                         </div>
                                     @endif
 
+                                    @if (session('import_errors'))
+                                        <div class="alert alert-danger">
+                                            <strong>Import failed:</strong>
+                                            <ul class="mb-0">
+                                                @foreach (session('import_errors') as $line)
+                                                    <li>{{ $line }}</li>
+                                                @endforeach
+                                            </ul>
+                                        </div>
+                                    @endif
+
                                     <hr />
                                     <div class="card">
                                         <div class="card-body">
