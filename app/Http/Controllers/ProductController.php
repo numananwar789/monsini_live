@@ -32,6 +32,13 @@ class ProductController extends Controller
             ->orderByDesc('version_year')
             ->get();
 
+        // Get all years
+        $years = DB::table('dt_product')
+            ->select('version_year as year')
+            ->groupBy('version_year')
+            ->orderByDesc('version_year')
+            ->get();
+
         // Get product counts per year (same logic as products query)
         $yearCounts = DB::table('dt_product')
             ->selectRaw('version_year, COUNT(DISTINCT product_style) as count')
@@ -49,7 +56,8 @@ class ProductController extends Controller
         }
 
         $allSubProducts = \App\Models\SubProduct::pluck('sub_product_name')->toArray();
-        return view('products.index', compact('allSubProducts', 'years'));
+
+        return view('products.index', compact('allSubProducts','years'));
     }
 
     /**
