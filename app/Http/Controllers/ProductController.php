@@ -340,7 +340,7 @@ class ProductController extends Controller
             'archiveName' => 'required|string|max:255'
         ]);
 
-        \DB::transaction(function () use ($validated) {
+        DB::transaction(function () use ($validated) {
 
             $products = Product::whereIn('product_style', $validated['selectedItems'])->get();
 
