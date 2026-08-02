@@ -17,7 +17,7 @@
 
                                         <h5 class="mb-0 text-uppercase">Edit Order</h5>
                                         <hr />
-                                       
+
                                         <div class="card">
                                             <div class="card-body">
                                                 <div class="row mt-4">
@@ -157,7 +157,7 @@
                                                                 class="form-control @error('sub_products') is-invalid @enderror"
                                                                 id="sub_products" name="sub_products[]" multiple>
                                                                 @php
-                                                            
+
                                                                     $selectedSubProducts = old(
                                                                         'sub_products',
                                                                         $order->sub_products ?? [],
@@ -177,12 +177,11 @@
                                                         </div>
                                                     </div>
 
-                                                </div>
-
-                                                <div class="col">
-                                                    <label for="note">Note</label>
-                                                    <input type="text" class="form-control" name="note" id="note"
-                                                        value="{{ $order->order_note }}">
+                                                    <div class="col-md-6">
+                                                        <label for="note">Note</label>
+                                                        <input type="text" class="form-control" name="note" id="note"
+                                                            value="{{ $order->order_note }}">
+                                                    </div>
                                                 </div>
 
                                             </div>
@@ -206,133 +205,6 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
-
-    {{-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> --}}
-    <!--<script>-->
-    <!--    $(document).ready(function() {-->
-
-    <!--        $('#sub_products').select2({-->
-    <!--            placeholder: "Select sub-products",-->
-    <!--            allowClear: true-->
-    <!--        });-->
-
-    <!--        let costProd = {{ $costProduct }};-->
-
-            // Get sizes on style change
-    <!--        $('#style').change(function() {-->
-    <!--            let style_get = $('#style').val();-->
-    <!--            if (style_get != null) {-->
-    <!--                $.ajax({-->
-    <!--                    url: "{{ route('get.size') }}",-->
-    <!--                    type: "POST",-->
-    <!--                    dataType: "JSON",-->
-    <!--                    data: {-->
-    <!--                        style_get: style_get,-->
-    <!--                        _token: '{{ csrf_token() }}'-->
-    <!--                    },-->
-    <!--                    success: function(response) {-->
-                            // Handle both array response and single object response
-    <!--                        let sizeRange = Array.isArray(response) ? response[0] : response;-->
-    <!--                        let min_val = sizeRange.min;-->
-    <!--                        let max_val = sizeRange.max;-->
-
-    <!--                        $('#size').empty().append(`<option value="">Choose Size</option>`);-->
-    <!--                        for (let i = parseInt(min_val); i <= parseInt(max_val); i += 2) {-->
-    <!--                            $('#size').append(`<option value="${i}">${i}</option>`);-->
-    <!--                        }-->
-    <!--                    },-->
-    <!--                    error: function(xhr) {-->
-    <!--                        console.error(xhr.responseText);-->
-    <!--                    }-->
-    <!--                });-->
-    <!--            }-->
-    <!--        });-->
-
-            // Get colors on style change
-    <!--        $('#style').change(function() {-->
-    <!--            $.ajax({-->
-    <!--                type: 'POST',-->
-    <!--                url: '{{ route('get.color') }}',-->
-    <!--                data: {-->
-    <!--                    style: $(this).val(),-->
-    <!--                    _token: '{{ csrf_token() }}'-->
-    <!--                },-->
-    <!--                success: function(data) {-->
-    <!--                    $('#color').html(data);-->
-    <!--                },-->
-    <!--                error: function(xhr) {-->
-    <!--                    console.error(xhr.responseText);-->
-    <!--                    $('#color').html('<option value="">Error loading colors</option>');-->
-    <!--                }-->
-    <!--            });-->
-    <!--        });-->
-
-            // Get cost on style change        
-    <!--        $('#style').change(function() {-->
-    <!--            $.ajax({-->
-    <!--                type: 'POST',-->
-    <!--                url: '{{ route('get.cost') }}',-->
-    <!--                data: {-->
-    <!--                    style: $(this).val(),-->
-    <!--                    _token: '{{ csrf_token() }}'-->
-    <!--                },-->
-    <!--                success: function(data) {-->
-    <!--                    costProd = data;-->
-    <!--                }-->
-    <!--            });-->
-    <!--        });-->
-
-            // Get sizes on style change
-    <!--        $('#style').change(function() {-->
-    <!--            let style_get = $('#style').val();-->
-    <!--            if (style_get != null) {-->
-    <!--                $.ajax({-->
-    <!--                    url: "{{ route('get.size') }}",-->
-    <!--                    type: "POST",-->
-    <!--                    dataType: "JSON",-->
-    <!--                    data: {-->
-    <!--                        style_get: style_get,-->
-    <!--                        _token: '{{ csrf_token() }}'-->
-    <!--                    },-->
-    <!--                    success: function(response) {-->
-    <!--                        let min_val = response.min;-->
-    <!--                        let max_val = response.max;-->
-    <!--                        $('#size').empty().append(`<option value="">Choose Size</option>`);-->
-    <!--                        for (let i = parseInt(min_val); i <= parseInt(max_val); i += 2) {-->
-    <!--                            $('#size').append(`<option value="${i}">${i}</option>`);-->
-    <!--                        }-->
-    <!--                    }-->
-    <!--                });-->
-    <!--            }-->
-    <!--        });-->
-
-            // Change price on quantity or size change
-    <!--        function updatePrice() {-->
-    <!--            const sizeProd = $('#size').val();-->
-    <!--            const quantity = $('#quantity').val() || 0;-->
-
-    <!--            if (sizeProd >= 18) {-->
-    <!--                $('#price').val(quantity * (parseInt(costProd) + 30));-->
-    <!--            } else if (sizeProd < 18) {-->
-    <!--                $('#price').val(quantity * costProd);-->
-    <!--            }-->
-    <!--        }-->
-
-    <!--        $('#quantity').keyup(updatePrice);-->
-    <!--        $('#size').change(updatePrice);-->
-
-
-    <!--        $('#style').change(function() {-->
-    <!--            const style = $(this).val();-->
-    <!--            if (style) {-->
-    <!--                $.get("/inventory/get-products/" + style, function(data) {-->
-    <!--                    $('#sub_products').html(data);-->
-    <!--                });-->
-    <!--            }-->
-    <!--        });-->
-
-    <!--    });-->
-    <!--</script>-->
     <script>
     $(document).ready(function() {
 
