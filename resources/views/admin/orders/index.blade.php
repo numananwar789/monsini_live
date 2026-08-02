@@ -17,9 +17,12 @@
 
 @section('content')
 
-<script>
-    let flaggedOrders = [];
-</script>
+    <script>
+        // Populated via AJAX from getFlaggedOrders() once on page load, instead
+        // of being built from every pending order server-side in Blade — that
+        // would defeat the point of paginating the table.
+        let flaggedOrders = [];
+    </script>
 
     <!-- [ Main Content ] start -->
     <div class="pcoded-main-container">
@@ -90,78 +93,8 @@
                                                             </tr>
                                                         </thead>
                                                         <tbody>
-                                                            @foreach ($orderList as $order)
-                                                                @php
-                                                                    $row_clr = '';
-                                                                    if (
-                                                                        strtoupper($order->order_customer_name) ==
-                                                                        strtoupper($ownerComp)
-                                                                    ) {
-                                                                        $row_clr =
-                                                                            'background-color: #3f4d67; color:white;';
-                                                                    }
-                                                                    if ($order->given_by_invntry > 0) {
-                                                                        $row_clr =
-                                                                            'background-color: rgb(0 100 12); color:white;';
-                                                                    }
-                                                                    if ($order->given_by_onway > 0) {
-                                                                        $row_clr =
-                                                                            'background-color: rgb(209 198 0); color:black;';
-                                                                    }
-                                                                @endphp
-                                                                <tr style="{{ $row_clr }}">
-                                                                    <td style="text-align: center;vertical-align: middle;">
-                                                                        <input form="orderForm" class="form-check-input"
-                                                                            type="checkbox" value="{{ $order->order_ID }}"
-                                                                            id="{{ $order->order_ID }}" name="orders[]">
-                                                                        <label class="form-check-label"
-                                                                            for="{{ $order->order_ID }}"></label>
-                                                                    </td>
-                                                                    <td>{{ $order->order_ID }}</td>
-                                                                    <td>{{ $order->order_GUID }}</td>
-                                                                    <td>{{ $order->purchase_id }}</td>
-                                                                    <td>{{ explode(' ', $order->created_at)[0] }}</td>
-                                                                    <td>{{ strtoupper($order->order_customer_name) }}</td>
-                                                                    <td>{{ strtoupper($order->order_vendor_name) }}</td>
-                                                                    <td>{{ strtoupper($order->order_product_style) }}</td>
-                                                                    <td>{{ strtoupper($order->order_product_color) }}</td>
-                                                                    <td>{{ implode(', ', $order->sub_products ?? []) }}</td>
-                                                                    <td>{{ $order->order_product_size }}</td>
-                                                                    <td>{{ $order->order_quantity }}</td>
-                                                                    <td>{{ $order->order_wear_date }}</td>
-                                                                    <td>{{ $order->given_by_invntry }}</td>
-                                                                    <td>{{ $order->given_by_onway }}</td>
-                                                                    <td>{{ $order->order_cost }}</td>
-                                                                    <td>{{ $order->order_purchase_price }}</td>
-                                                                    <td>{{ $order->order_status }}</td>
-                                                                    <td>{{ $order->user_flag }}</td>
-                                                                    <td class="text-center">
-                                                                        <a target="_self"
-                                                                            class="btn btn-success mb-0 btn-sm"
-                                                                            href="{{ route('orders.edit', $order->order_ID) }}">Edit</a>
-                                                                        @if (auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1')
-                                                                            <a target="_self"
-                                                                                class="btn btn-danger mb-0 mr-0 btn-sm"
-                                                                                href="{{ route('orders.delete-id', $order->order_ID) }}">Delete</a>
-                                                                        @endif
-                                                                        <input type="hidden" name="orderID"
-                                                                            value="{{ $order->order_ID }}">
-                                                                    </td>
-                                                                </tr>
-
-                                                                @if ($order->given_by_invntry > 0 && !empty($order->sub_products))
-                                                                    <script>
-                                                                        flaggedOrders.push({
-                                                                            id: "{{ $order->order_ID }}",
-                                                                            guid: "{{ $order->order_GUID }}",
-                                                                            style: "{{ strtoupper($order->order_product_style) }}",
-                                                                            color: "{{ strtoupper($order->order_product_color) }}",
-                                                                            subs: "{{ implode(', ', $order->sub_products ?? []) }}",
-                                                                            qty: "{{ $order->order_quantity }}"
-                                                                        });
-                                                                    </script>
-                                                                @endif
-                                                            @endforeach
+                                                            {{-- Rows loaded via AJAX by DataTables (serverSide),
+                                                                 see getOrdersData(). Nothing rendered here. --}}
                                                         </tbody>
                                                     </table>
                                                 </form>
@@ -174,24 +107,18 @@
                                             New Order</a>
                                         <a class="btn btn-primary text-white" data-toggle="modal"
                                             data-target="#importModal">Import Orders</a>
-                                        {{-- <button type="submit" form="orderForm" formaction="{{ route('orders.accept') }}"
-                                            class="btn btn-primary" onclick="xpandTablePrint()">Accept Customer
-                                            Orders</button> --}}
 
-                                        <button type="button"
-                                                class="btn btn-primary"
-                                                onclick="confirmOrders()">
+                                        <button type="button" class="btn btn-primary" onclick="confirmOrders()">
                                             Accept Customer Orders
                                         </button>
 
-                                        <a href="{{ route('orders.export.pending') }}" class="btn btn-success float-right" style="color:#fff;">Download
+                                        <a href="{{ route('orders.export.pending') }}" class="btn btn-success float-right"
+                                            style="color:#fff;">Download
                                             Order Data</a>
                                         @if (auth()->user()->admin_role == 'superadmin')
-                                            {{-- <a href="{{ route('orders.clear-all') }}" class="btn btn-danger float-right"
-                                                onclick="return confirm('Are you sure you want to delete all orders');">Clear
-                                                All Orders</a> --}}
                                         @endif
-                                        <a href="{{ route('orders.refresh') }}" class="btn btn-warning float-right" style="color:#fff;">Refresh
+                                        <a href="{{ route('orders.refresh') }}" class="btn btn-warning float-right"
+                                            style="color:#fff;">Refresh
                                             Orders</a>
                                         <button type="submit" form="orderForm" formaction="{{ route('orders.cancel') }}"
                                             class="btn btn-warning float-right"
@@ -216,9 +143,8 @@
                                                     <div class="modal-body">
                                                         <div class="form-group">
                                                             <label for="orderFile">Upload File</label>
-                                                            <input name="file" type="file"
-                                                                class="form-control-file" id="orderFile"
-                                                                accept=".xls,.xlsx" required>
+                                                            <input name="file" type="file" class="form-control-file"
+                                                                id="orderFile" accept=".xls,.xlsx" required>
                                                         </div>
                                                     </div>
                                                     <div class="modal-footer">
@@ -243,38 +169,39 @@
     <div class="modal fade" id="conflictModal" tabindex="-1" aria-labelledby="conflictModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
-            <div class="modal-header bg-warning text-dark">
-                <h5 class="modal-title" id="conflictModalLabel">⚠️ Inventory Allocation Warning</h5>
-                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            
-            <div class="modal-body">
-                <p>If you proceed, the selected orders will be allocated from <strong>inventory</strong>.  
-                However, the <strong>sub-products (add-ons)</strong> are not in stock and must be purchased separately from the vendor.</p>
-                
-                <div class="table-responsive">
-                <table class="table table-bordered table-sm">
-                    <thead class="table-light">
-                    <tr>
-                        <th>Order ID</th>
-                        <th>GUID</th>
-                        <th>Style</th>
-                        <th>Color</th>
-                        <th>Sub Products</th>
-                        <th>Qty</th>
-                    </tr>
-                    </thead>
-                    <tbody id="conflictOrdersTable"></tbody>
-                </table>
+                <div class="modal-header bg-warning text-dark">
+                    <h5 class="modal-title" id="conflictModalLabel">⚠️ Inventory Allocation Warning</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
-            </div>
-            
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-primary" onclick="submitOrderForm()">Proceed Anyway</button>
-            </div>
+
+                <div class="modal-body">
+                    <p>If you proceed, the selected orders will be allocated from <strong>inventory</strong>.
+                        However, the <strong>sub-products (add-ons)</strong> are not in stock and must be purchased
+                        separately from the vendor.</p>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>GUID</th>
+                                    <th>Style</th>
+                                    <th>Color</th>
+                                    <th>Sub Products</th>
+                                    <th>Qty</th>
+                                </tr>
+                            </thead>
+                            <tbody id="conflictOrdersTable"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitOrderForm()">Proceed Anyway</button>
+                </div>
             </div>
         </div>
     </div>
@@ -283,16 +210,11 @@
 @endsection
 
 @section('page-js')
-
-@if(session('success') == 'Orders refreshed successfully')
-<script>
-    window.location.reload();
-</script>
-@endif
-    {{-- <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk="
-        crossorigin="anonymous"></script>
-    <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script>
-    <script src="/assets/js/pcoded.min.js"></script> --}}
+    @if (session('success') == 'Orders refreshed successfully')
+        <script>
+            window.location.reload();
+        </script>
+    @endif
     <script src="/assets/plugins/notification/js/bootstrap-growl.min.js"></script>
 
     <!-- DataTables -->
@@ -311,29 +233,25 @@
             let conflicts = flaggedOrders.filter(o => selected.includes(o.id));
 
             if (conflicts.length > 0) {
-                 let tbody = document.getElementById("conflictOrdersTable");
-                    tbody.innerHTML = "";
-                    conflicts.forEach(o => {
-                        tbody.innerHTML += `
-                            <tr>
-                                <td>${o.id}</td>
-                                <td>${o.guid}</td>
-                                <td>${o.style}</td>
-                                <td>${o.color}</td>
-                                <td>${o.subs}</td>
-                                <td>${o.qty}</td>
-                            </tr>`;
-                    });
+                let tbody = document.getElementById("conflictOrdersTable");
+                tbody.innerHTML = "";
+                conflicts.forEach(o => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${o.id}</td>
+                            <td>${o.guid}</td>
+                            <td>${o.style}</td>
+                            <td>${o.color}</td>
+                            <td>${o.subs}</td>
+                            <td>${o.qty}</td>
+                        </tr>`;
+                });
 
-                    // Show modal
-                    let modal = new bootstrap.Modal(document.getElementById('conflictModal'));
-                    modal.show();
-            }else {
-                // No conflicts → submit directly
+                let modal = new bootstrap.Modal(document.getElementById('conflictModal'));
+                modal.show();
+            } else {
                 submitOrderForm();
             }
-
-          
         }
 
         function submitOrderForm() {
@@ -341,14 +259,119 @@
             form.action = "{{ route('orders.accept') }}";
             form.submit();
         }
-
     </script>
-
 
     <script>
         var table;
         $(document).ready(function() {
+
+            // Fetch the (small) list of orders that would conflict with an
+            // inventory allocation, once, independent of table pagination.
+            $.getJSON("{{ route('orders.flagged') }}", function(data) {
+                flaggedOrders = data;
+            });
+
             table = $('#example').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: "{{ route('orders.datatable') }}",
+                    type: 'GET'
+                },
+                columns: [{
+                        data: 'checkbox',
+                        name: 'checkbox',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'order_id',
+                        name: 'order_ID'
+                    },
+                    {
+                        data: 'order_guid',
+                        name: 'order_GUID'
+                    },
+                    {
+                        data: 'purchase_id',
+                        name: 'purchase_id'
+                    },
+                    {
+                        data: 'place_date',
+                        name: 'created_at'
+                    },
+                    {
+                        data: 'customer',
+                        name: 'order_customer_name'
+                    },
+                    {
+                        data: 'vendor',
+                        name: 'order_vendor_name'
+                    },
+                    {
+                        data: 'style',
+                        name: 'order_product_style'
+                    },
+                    {
+                        data: 'color',
+                        name: 'order_product_color'
+                    },
+                    {
+                        data: 'sub_products',
+                        name: 'sub_products',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'size',
+                        name: 'order_product_size'
+                    },
+                    {
+                        data: 'quantity',
+                        name: 'order_quantity'
+                    },
+                    {
+                        data: 'wear_date',
+                        name: 'order_wear_date'
+                    },
+                    {
+                        data: 'from_inventory',
+                        name: 'given_by_invntry'
+                    },
+                    {
+                        data: 'from_onway',
+                        name: 'given_by_onway'
+                    },
+                    {
+                        data: 'total_cost',
+                        name: 'order_cost'
+                    },
+                    {
+                        data: 'total_price',
+                        name: 'order_purchase_price'
+                    },
+                    {
+                        data: 'status',
+                        name: 'order_status'
+                    },
+                    {
+                        data: 'user',
+                        name: 'user_flag'
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false
+                    },
+                ],
+                // Applies the same row background-color rules the old Blade
+                // @php block computed per row, now sent as row_style in the JSON.
+                createdRow: function(row, data) {
+                    if (data.row_style) {
+                        $(row).attr('style', data.row_style);
+                    }
+                },
                 aLengthMenu: [
                     [25, 50, 100, 200, -1],
                     [25, 50, 100, 200, "All"]

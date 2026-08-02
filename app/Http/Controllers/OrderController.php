@@ -18,8 +18,6 @@ use App\Models\OrderAllocationCancel;
 use App\Models\OrderCancel;
 use App\Models\OrderHistoryArchive;
 use App\Models\OrderFinalCancel;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\OrderConfirmation;
 use Exception;
 use Illuminate\Support\Facades\DB;
 use App\Exports\PendingOrdersExport;
@@ -29,23 +27,213 @@ use Illuminate\Http\Request;
 
 class OrderController extends Controller
 {
+    // ============================================================================
+    // 1) Replace the existing index() method with this trimmed version.
+    //    It no longer loads every pending order — that now happens in
+    //    getOrdersData() below, driven by DataTables' serverSide paging.
+    // ============================================================================
+
     public function index()
     {
-
-
         if (auth()->check() && auth()->user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
-        // Check user role
         if (Auth::user()->admin_role == 'customer') {
             return redirect()->route('home');
         }
 
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
-        $orderList = Order::where('order_status', 'Pending')->get();
 
-        return view('admin.orders.index', compact('ownerComp', 'orderList'));
+        // $orderList removed — rows are now loaded via AJAX (getOrdersData()).
+        // $ownerComp is still needed here for nothing in the view itself now
+        // (row coloring moved server-side into getOrdersData()), but we keep
+        // it in case other parts of the view/layout reference it.
+
+        return view('admin.orders.index', compact('ownerComp'));
+    }
+
+    // ============================================================================
+    // 2) New method: AJAX endpoint consumed by the DataTables "serverSide"
+    //    config on orders.index. Only ever loads $length rows (default 25),
+    //    not every pending order.
+    // ============================================================================
+
+    public function getOrdersData(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 25);
+        $searchValue = trim((string) $request->input('search.value', ''));
+        $orderColumnIndex = $request->input('order.0.column');
+        $orderDir = strtolower($request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        // Column index -> DB column, matching the <thead> order in the Blade view.
+        // 0 (checkbox), 9 (sub_products), 19 (actions) are intentionally omitted (not sortable).
+        $sortableColumns = [
+            1 => 'order_ID',
+            2 => 'order_GUID',
+            3 => 'purchase_id',
+            4 => 'created_at',
+            5 => 'order_customer_name',
+            6 => 'order_vendor_name',
+            7 => 'order_product_style',
+            8 => 'order_product_color',
+            10 => 'order_product_size',
+            11 => 'order_quantity',
+            12 => 'order_wear_date',
+            13 => 'given_by_invntry',
+            14 => 'given_by_onway',
+            15 => 'order_cost',
+            16 => 'order_purchase_price',
+            17 => 'order_status',
+            18 => 'user_flag',
+        ];
+
+        $base = Order::where('order_status', 'Pending');
+
+        $recordsTotal = (clone $base)->count();
+
+        $query = clone $base;
+
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('order_GUID', 'like', "%{$searchValue}%")
+                    ->orWhere('purchase_id', 'like', "%{$searchValue}%")
+                    ->orWhere('order_customer_name', 'like', "%{$searchValue}%")
+                    ->orWhere('order_vendor_name', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_style', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_color', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_size', 'like', "%{$searchValue}%")
+                    ->orWhere('order_status', 'like', "%{$searchValue}%")
+                    ->orWhere('user_flag', 'like', "%{$searchValue}%");
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        if ($orderColumnIndex !== null && isset($sortableColumns[$orderColumnIndex])) {
+            $query->orderBy($sortableColumns[$orderColumnIndex], $orderDir);
+        } else {
+            $query->orderBy('order_ID', 'desc');
+        }
+
+        if ($length != -1) {
+            $query->offset($start)->limit($length);
+        }
+
+        $rows = $query->get();
+
+        $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
+        $canDelete = auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1';
+
+        $data = [];
+        foreach ($rows as $order) {
+
+            // Same row-coloring rules as the old Blade @php block, moved here
+            // since server-side rows are now built as JSON, not <tr> markup.
+            $rowStyle = '';
+            if (strtoupper((string) $order->order_customer_name) === strtoupper((string) $ownerComp)) {
+                $rowStyle = 'background-color: #3f4d67; color:white;';
+            }
+            if ($order->given_by_invntry > 0) {
+                $rowStyle = 'background-color: rgb(0 100 12); color:white;';
+            }
+            if ($order->given_by_onway > 0) {
+                $rowStyle = 'background-color: rgb(209 198 0); color:black;';
+            }
+
+            $subProductsArr = [];
+            if (!empty($order->sub_products)) {
+                $decoded = is_array($order->sub_products)
+                    ? $order->sub_products
+                    : json_decode($order->sub_products, true);
+                if (is_array($decoded)) {
+                    $subProductsArr = $decoded;
+                }
+            }
+            $subProductsText = implode(', ', $subProductsArr);
+
+            $actions = '<a target="_self" class="btn btn-success mb-0 btn-sm" href="' . route('orders.edit', $order->order_ID) . '">Edit</a>';
+            if ($canDelete) {
+                $actions .= ' <a target="_self" class="btn btn-danger mb-0 mr-0 btn-sm" href="' . route('orders.delete-id', $order->order_ID) . '">Delete</a>';
+            }
+            $actions .= '<input type="hidden" name="orderID" value="' . e($order->order_ID) . '">';
+
+            $createdDate = $order->created_at ? explode(' ', (string) $order->created_at)[0] : '';
+
+            $data[] = [
+                'checkbox' => '<input form="orderForm" class="form-check-input" type="checkbox" value="' . e($order->order_ID) . '" id="chk_order_' . e($order->order_ID) . '" name="orders[]"><label class="form-check-label" for="chk_order_' . e($order->order_ID) . '"></label>',
+                'order_id' => e($order->order_ID),
+                'order_guid' => e($order->order_GUID),
+                'purchase_id' => e($order->purchase_id),
+                'place_date' => e($createdDate),
+                'customer' => strtoupper(e($order->order_customer_name)),
+                'vendor' => strtoupper(e($order->order_vendor_name)),
+                'style' => strtoupper(e($order->order_product_style)),
+                'color' => strtoupper(e($order->order_product_color)),
+                'sub_products' => e($subProductsText),
+                'size' => e($order->order_product_size),
+                'quantity' => e($order->order_quantity),
+                'wear_date' => e($order->order_wear_date),
+                'from_inventory' => e($order->given_by_invntry),
+                'from_onway' => e($order->given_by_onway),
+                'total_cost' => e($order->order_cost),
+                'total_price' => e($order->order_purchase_price),
+                'status' => e($order->order_status),
+                'user' => e($order->user_flag),
+                'actions' => $actions,
+                // extra keys, not bound to a <th> column, read via createdRow in JS
+                'row_style' => $rowStyle,
+            ];
+        }
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
+    }
+
+    // ============================================================================
+    // 3) New method: powers the "Accept Customer Orders" conflict-warning modal.
+    //    This must cover ALL pending orders that would conflict (not just the
+    //    current page), so it's a separate, smaller, targeted query rather than
+    //    being folded into every getOrdersData() page load.
+    // ============================================================================
+
+    public function getFlaggedOrders()
+    {
+        $orders = Order::where('order_status', 'Pending')
+            ->where('given_by_invntry', '>', 0)
+            ->get(['order_ID', 'order_GUID', 'order_product_style', 'order_product_color', 'sub_products', 'order_quantity']);
+
+        $flagged = [];
+        foreach ($orders as $order) {
+            $subs = [];
+            if (!empty($order->sub_products)) {
+                $decoded = is_array($order->sub_products)
+                    ? $order->sub_products
+                    : json_decode($order->sub_products, true);
+                if (is_array($decoded)) {
+                    $subs = $decoded;
+                }
+            }
+            if (empty($subs)) {
+                continue;
+            }
+            $flagged[] = [
+                'id' => (string) $order->order_ID,
+                'guid' => (string) $order->order_GUID,
+                'style' => strtoupper((string) $order->order_product_style),
+                'color' => strtoupper((string) $order->order_product_color),
+                'subs' => implode(', ', $subs),
+                'qty' => (string) $order->order_quantity,
+            ];
+        }
+
+        return response()->json($flagged);
     }
 
     public function accept(Request $request)
@@ -230,7 +418,6 @@ class OrderController extends Controller
             ];
         })->toArray();
 
-        // dd($finalOrderData);
         OrderFinal::insert($finalOrderData);
     }
 
@@ -247,21 +434,15 @@ class OrderController extends Controller
         return redirect()->route('orders.index')->with('success', 'Orders cancelled successfully');
     }
 
-
-
     public function cancel(Request $request)
     {
         // Validate that orderIDs exists and is an array
-
-        //  dd($request->all());
-
         $request->validate([
             'orders' => 'required|array',
             'orders.*' => 'required|integer'
         ]);
 
         $orderIDs = $request->input('orders');
-        // dd($orderIDs);
         try {
             DB::transaction(function () use ($orderIDs) {
                 // Insert into cancel table
@@ -326,25 +507,10 @@ class OrderController extends Controller
                     ->delete();
             });
 
-            return redirect()->route('orders.index')
-                ->with('success', 'Order(s) cancelled successfully!');
+            return redirect()->route('orders.index')->with('success', 'Order(s) cancelled successfully!');
+        } catch (Exception $e) {
 
-            return response()->json([
-                'success' => true,
-                'message' => 'Order(s) cancelled successfully!'
-            ]);
-        } catch (\Exception $e) {
-
-            return redirect()->route('orders.index')
-                ->with('error', 'Failed to cancel orders: ' . $e->getMessage());
-
-            // return response()->json([
-
-
-
-            //     'success' => false,
-            //     'message' => 'Failed to cancel orders: ' . $e->getMessage()
-            // ], 500);
+            return redirect()->route('orders.index')->with('error', 'Failed to cancel orders: ' . $e->getMessage());
         }
     }
 
@@ -497,55 +663,7 @@ class OrderController extends Controller
 
         return $options;
     }
-    
-    // public function getSizes($style)
-    // {
-    //     $product = Product::where('product_style', $style)->first();
-    
-    //     if (!$product) {
-    //         return '<option value="">No sizes available</option>';
-    //     }
-    
-    //     $range = explode('-', $product->product_size_range);
-    
-    //     $originalMin = isset($range[0]) ? trim($range[0]) : '0';
-    
-    //     $min = (int)$range[0];
-    //     $max = (int)$range[1];
-    
-    //     $options = '<option value="">Choose Size</option>';
-    
-    //     // ==========================================
-    //     // CASE: 00-26
-    //     // Output: 00,0,2,4...
-    //     // ==========================================
-    //     if ($originalMin === '00') {
-    
-    //         // first option = 00
-    //         $options .= '<option value="00">00</option>';
-    
-    //         for ($i = 0; $i <= $max; $i += 2) {
-    
-    //             $options .= '<option value="' . $i . '">' . $i . '</option>';
-    //         }
-    //     }
-    
-    //     // ==========================================
-    //     // CASE: 0-26
-    //     // Output: 0,2,4...
-    //     // ==========================================
-    //     else {
-    
-    //         for ($i = $min; $i <= $max; $i += 2) {
-    
-    //             $options .= '<option value="' . $i . '">' . $i . '</option>';
-    //         }
-    //     }
-    
-    //     return $options;
-    // }
-    
-    
+
     public function getSizes($style)
     {
         $product = Product::selectRaw('
@@ -555,35 +673,35 @@ class OrderController extends Controller
             ->where('product_style', $style)
             ->groupBy('product_style')
             ->first();
-    
+
         if (!$product || !$product->product_size_range) {
             return '<option value="">No sizes available</option>';
         }
-    
+
         $range = explode('-', $product->product_size_range);
-    
+
         $originalMin = trim($range[0]);
         $min = (int) trim($range[0]);
         $max = (int) trim($range[1]);
-    
+
         $options = '<option value="">Choose Size</option>';
-    
+
         // CASE: 00-24
         if ($originalMin === '00') {
-    
+
             $options .= '<option value="00">00</option>';
-    
+
             for ($i = 0; $i <= $max; $i += 2) {
                 $options .= '<option value="' . $i . '">' . $i . '</option>';
             }
-    
+
         } else {
-    
+
             for ($i = $min; $i <= $max; $i += 2) {
                 $options .= '<option value="' . $i . '">' . $i . '</option>';
             }
         }
-    
+
         return $options;
     }
 
@@ -635,7 +753,7 @@ class OrderController extends Controller
             ->get();
 
 
-        $product = Product::where('product_style',  $order->order_product_style)->first();
+        $product = Product::where('product_style', $order->order_product_style)->first();
 
         $sub_products = $product && $product->sub_products ? $product->sub_products : [];
         $subProducts = is_string($sub_products)
@@ -679,14 +797,14 @@ class OrderController extends Controller
         // $orderCost = ($prodSize < 18)
         //     ? $prodQuant * $product->product_wholesale_price
         //     : $prodQuant * ($product->product_wholesale_price + 30);
-        
-            $orderCost = $this->calculateOrderCost(
-    $prodStyle,
-    $prodSize,
-    $prodQuant,
-    $product->product_wholesale_price
-);
-      
+
+        $orderCost = $this->calculateOrderCost(
+            $prodStyle,
+            $prodSize,
+            $prodQuant,
+            $product->product_wholesale_price
+        );
+
 
         $orderPurchasePrice = $prodQuant * $product->product_cost;
 
@@ -773,9 +891,9 @@ class OrderController extends Controller
         DB::transaction(function () {
             $pendingOrders = Order::where('order_status', 'Pending')->get();
             $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
-           
+
             foreach ($pendingOrders as $order) {
-                
+
                 $inventoryCount = Inventory::where('product_style', $order->order_product_style)
                     ->where('product_color', $order->order_product_color)
                     ->where('product_size', $order->order_product_size)
@@ -788,12 +906,12 @@ class OrderController extends Controller
                     ->where('order_customer_name', $ownerComp)
                     ->where('order_quantity', '>', 0)
                     ->sum('order_quantity');
-                
+
                 $ordRemQuantity = $order->order_quantity - $order->given_by_invntry - $order->given_by_onway;
 
                 // Handle inventory and onway items
                 $remainingQuantity = $ordRemQuantity;
-                
+
                 // Process inventory first if available
                 if ($inventoryCount > 0 && $remainingQuantity > 0) {
                     if ($inventoryCount > $remainingQuantity) {
@@ -815,9 +933,9 @@ class OrderController extends Controller
                             ->update(['product_quantity' => 0]);
 
                         $remainingQuantity -= $inventoryCount;
-                    } else { 
+                    } else {
                         // $inventoryCount == $remainingQuantity
-                        
+
                         $order->update(['given_by_invntry' => $order->given_by_invntry + $inventoryCount]);
 
                         // Update inventory to 0
@@ -841,14 +959,15 @@ class OrderController extends Controller
                         ->get();
 
                     foreach ($onWayOrders as $orderNow) {
-                        if ($remainingQuantity <= 0) break;
+                        if ($remainingQuantity <= 0)
+                            break;
 
                         if ($orderNow->order_quantity > $remainingQuantity) {
 
                             $order->update(['given_by_onway' => $order->given_by_onway + $remainingQuantity]);
                             // Update allocation quantity
                             $orderNow->decrement('order_quantity', $remainingQuantity);
-                            
+
                             $remainingQuantity = 0;
                         } elseif ($orderNow->order_quantity < $remainingQuantity) {
                             $order->update(['given_by_onway' => $order->given_by_onway + $orderNow->order_quantity]);
@@ -877,7 +996,6 @@ class OrderController extends Controller
 
     public function clearAll()
     {
-        // dd(Auth::user()->admin_role);
         // Authentication and authorization check
         if (!Auth::check() || Auth::user()->admin_role !== 'superadmin') {
             abort(403, 'Unauthorized action.');
@@ -917,18 +1035,18 @@ class OrderController extends Controller
 
         ]);
 
-       
+
         // Get form data
         $sub_products = $validated['sub_products'] ?? [];
         $prodStyle = strtolower($request->input('style'));
         $prodColor = $request->input('color');
         $prodSize = $request->input('size');
-        $prodQuant = (int)$request->input('quantity');
+        $prodQuant = (int) $request->input('quantity');
         $prodPur = $request->input('purchase_id');
         $wearDateNow = $request->input('wearDate');
         $orderNote = $request->input('note');
 
-       
+
 
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name'); // Assuming you have this in your config
 
@@ -949,10 +1067,10 @@ class OrderController extends Controller
         // $orderCost = $prodSize < 18
         //     ? $prodQuant * $prodInfo->product_wholesale_price
         //     : $prodQuant * ($prodInfo->product_wholesale_price + 30);
-        
+
         $basePrice = $prodInfo->product_wholesale_price;
         $addition = 0;
-    
+
         if ($prodSize >= 18) {
             if (strtoupper(substr($prodStyle, 0, 1)) === 'B') {
                 $addition = 60;
@@ -960,7 +1078,7 @@ class OrderController extends Controller
                 $addition = 30;
             }
         }
-    
+
         $orderCost = $prodQuant * ($basePrice + $addition);
 
         $orderPurchasePrice = $prodQuant * $prodInfo->product_cost;
@@ -1027,8 +1145,8 @@ class OrderController extends Controller
                     'sub_products' => $sub_products,
                     'user_flag' => 'admin',
                     'order_GUID' => $this->generateOrderGuid(),
-                     'created_at' => now(),
-                    
+                    'created_at' => now(),
+
                 ]);
 
                 DB::commit();
@@ -1113,7 +1231,7 @@ class OrderController extends Controller
                             $onwayCustPurId,
                             $wearDateNow,
                             $remainingQuantity,
-                             $sub_products,
+                            $sub_products,
                         );
 
                         // Update inventory to 0
@@ -1137,7 +1255,8 @@ class OrderController extends Controller
                         ->get();
 
                     foreach ($onWayOrders as $orderNow) {
-                        if ($remainingQuantity <= 0) break;
+                        if ($remainingQuantity <= 0)
+                            break;
 
                         if ($orderNow->order_quantity > $remainingQuantity) {
                             $this->createOrderFromOnway(
@@ -1246,8 +1365,7 @@ class OrderController extends Controller
                 DB::commit();
                 return redirect()->route('orders.index')->with('success', 'Order created successfully');
             }
-        } catch (\Exception $e) {
-            // dd($e->getMessage());
+        } catch (Exception $e) {
             DB::rollBack();
             return back()->with('error', 'Error creating order: ' . $e->getMessage());
         }
@@ -1273,14 +1391,14 @@ class OrderController extends Controller
         $onwayCustPurId,
         $wearDateNow,
         $givenByInventory,
-         $sub_products,
+        $sub_products,
     ) {
-   $orderCost = $this->calculateOrderCost(
-    $prodStyle,
-    $prodSize,
-    $quantity,
-    $prodInfo->product_wholesale_price
-);
+        $orderCost = $this->calculateOrderCost(
+            $prodStyle,
+            $prodSize,
+            $quantity,
+            $prodInfo->product_wholesale_price
+        );
 
         $orderPurchasePrice = $quantity * $prodInfo->product_cost;
 
@@ -1305,7 +1423,7 @@ class OrderController extends Controller
             'user_flag' => 'admin',
             'sub_products' => $sub_products,
             'order_GUID' => $this->generateOrderGuid(),
-              'created_at' => now(),     
+            'created_at' => now(),
         ]);
     }
 
@@ -1329,18 +1447,18 @@ class OrderController extends Controller
         $customerPurchaseId,
         $wearDateNow,
         $givenByOnway,
-         $sub_products,
+        $sub_products,
     ) {
         // $orderCost = $prodSize < 18
         //     ? $quantity * $prodInfo->product_wholesale_price
         //     : $quantity * ($prodInfo->product_wholesale_price + 30);
-        
-      $orderCost = $this->calculateOrderCost(
-    $prodStyle,
-    $prodSize,
-    $quantity,
-    $prodInfo->product_wholesale_price
-);
+
+        $orderCost = $this->calculateOrderCost(
+            $prodStyle,
+            $prodSize,
+            $quantity,
+            $prodInfo->product_wholesale_price
+        );
         $orderPurchasePrice = $quantity * $prodInfo->product_cost;
 
         Order::create([
@@ -1364,7 +1482,7 @@ class OrderController extends Controller
             'user_flag' => 'admin',
             'sub_products' => $sub_products,
             'order_GUID' => $this->generateOrderGuid(),
-              'created_at' => now(),     
+            'created_at' => now(),
         ]);
     }
 
@@ -1415,20 +1533,20 @@ class OrderController extends Controller
             'sub_products' => $sub_products,
             'user_flag' => 'admin',
             'order_GUID' => $this->generateOrderGuid(),
-              'created_at' => now(),     
+            'created_at' => now(),
         ]);
     }
-    
+
     private function calculateOrderCost($style, $size, $quantity, $basePrice)
-{
-    $addition = 0;
+    {
+        $addition = 0;
 
-    if ((int)$size >= 18) {
-        $addition = strtoupper(substr(trim($style), 0, 1)) === 'B' ? 60 : 30;
+        if ((int) $size >= 18) {
+            $addition = strtoupper(substr(trim($style), 0, 1)) === 'B' ? 60 : 30;
+        }
+
+        return (int) $quantity * ((float) $basePrice + $addition);
     }
-
-    return (int)$quantity * ((float)$basePrice + $addition);
-}
 
     /**
      * Generate a unique order GUID
@@ -1438,7 +1556,7 @@ class OrderController extends Controller
         return rand(10000, 99999) . now()->format('YmdHis');
     }
 
-     public function deleteOrder($id)
+    public function deleteOrder($id)
     {
         // Check if user is authenticated and is not a customer
         if (Auth::user()->admin_role == 'customer') {
@@ -1461,8 +1579,7 @@ class OrderController extends Controller
                 // Just delete order
                 $order->delete();
                 return redirect()->route('orders.index'); // adjust route name
-            } 
-            else if ($onWayCount > 0) {
+            } else if ($onWayCount > 0) {
                 // Insert into dt_order_allocation based on order
                 OrderAllocation::create([
                     'final_ID' => 0,
@@ -1495,8 +1612,7 @@ class OrderController extends Controller
                 $order->delete();
 
                 return redirect()->route('orders.index')->with('success', 'Order deleted successfully');
-            } 
-            else if ($inventoryCount > 0) {
+            } else if ($inventoryCount > 0) {
                 // Update inventory quantity
                 $inventory = Inventory::where('product_style', $order->order_product_style)
                     ->where('product_color', $order->order_product_color)
@@ -1514,10 +1630,9 @@ class OrderController extends Controller
                 return redirect()->route('orders.index')->with('success', 'Order deleted successfully');
             }
 
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             // Log error and show message (or handle as needed)
-            // dd($e->getMessage());
-            return back()->withErrors([ $e->getMessage()]);
+            return back()->withErrors([$e->getMessage()]);
         }
     }
 }
