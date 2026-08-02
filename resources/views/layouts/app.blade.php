@@ -14,13 +14,12 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- Favicon icon -->
-    <link rel="icon" href="/assets/images/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/assets/images/monsiniprom-logo.png" type="image/x-icon">
     <!-- fontawesome icon -->
     <link rel="stylesheet" href="/assets/fonts/fontawesome/css/fontawesome-all.min.css">
     <!-- animation css -->
     <link rel="stylesheet" href="/assets/plugins/animation/css/animate.min.css">
     <!-- notification css -->
-
     <link rel="stylesheet" href="/assets/plugins/notification/css/notification.min.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.4/css/select2.min.css" rel="stylesheet" />
     <!-- vendor css -->
