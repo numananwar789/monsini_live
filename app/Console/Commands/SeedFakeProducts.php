@@ -27,7 +27,7 @@ class SeedFakeProducts extends Command
 
     protected $description = 'Bulk-generate fake product rows for load/performance testing the products DataTable';
 
-    protected $sizeRanges = ['XS-XL', 'S-XL', 'S-3XL', 'XS-3XL', '2-16', '0-14', 'One Size'];
+    protected $sizeRanges = ['2-16', '0-14', '00-24', '0-22'];
 
     public function handle()
     {
