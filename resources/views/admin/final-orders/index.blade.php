@@ -28,11 +28,14 @@
                                     <hr />
 
                                     <div class="card">
-                                        <div class="card-header" style="display: flex; align-items:end; justify-content:end">
+                                        <div class="card-header"
+                                            style="display: flex; align-items:end; justify-content:end">
                                             <div>
                                                 <p class="mb-0"><b>Total Quantities:</b> {{ $totOrderQuant }}</p>
-                                                <p class="mb-0"><b>Customer Orders (ENTRIES):</b> {{ $totOrderQuant_Others }}</p>
-                                                <p class="mb-0"><b>Company Orders (ENTRIES):</b> {{ $totOrderQuant_Comp }}</p>
+                                                <p class="mb-0"><b>Customer Orders (ENTRIES):</b>
+                                                    {{ $totOrderQuant_Others }}</p>
+                                                <p class="mb-0"><b>Company Orders (ENTRIES):</b> {{ $totOrderQuant_Comp }}
+                                                </p>
                                             </div>
                                         </div>
 
@@ -45,10 +48,17 @@
                                                     <input type="checkbox" name="check-all" id="check-all" class="ml-2">
                                                 </div>
 
-                                                <form id="orderForm" method="post" action="{{ route('final-orders.bypass') }}">
+                                                <form id="orderForm" method="post"
+                                                    action="{{ route('final-orders.bypass') }}">
                                                     @csrf
 
-                                                    <table id="example" class="table table-striped table-bordered" style="width:100%">
+                                                    {{-- Moved outside <table>: DataTables replaces the entire <tbody>
+                                                         content on every AJAX draw, so anything that needs to survive
+                                                         redraws (like this hidden field) can't live inside <tbody>. --}}
+                                                    <input type="text" hidden name="orderIDNew" id="orderIDNew">
+
+                                                    <table id="example" class="table table-striped table-bordered"
+                                                        style="width:100%">
                                                         <thead>
                                                             <tr>
                                                                 <th>Check</th>
@@ -75,81 +85,8 @@
                                                         </thead>
 
                                                         <tbody>
-                                                            <input type="text" hidden name="orderIDNew" id="orderIDNew">
-
-                                                            @foreach ($orderList as $order)
-                                                                @php
-                                                                    $row_clr = '';
-
-                                                                    if (str_contains(strtoupper($order->order_customer_name), strtoupper($ownerComp))) {
-                                                                        $row_clr = 'background-color: #3f4d67; color:white;';
-                                                                    }
-
-                                                                    if ($order->given_by_invntry > 0) {
-                                                                        $row_clr = 'background-color: rgb(0 100 12); color:white;';
-                                                                    }
-
-                                                                    if ($order->given_by_onway > 0) {
-                                                                        $row_clr = 'background-color: rgb(209 198 0); color:black;';
-                                                                    }
-
-                                                                    if ($order->order_status == 'Confirmed to Customer') {
-                                                                        $row_clr = 'background-color: #90EE90; color:black;';
-                                                                    }
-                                                                @endphp
-
-                                                                <tr style="{{ $row_clr }}">
-                                                                    <td style="text-align: center;vertical-align: middle;">
-                                                                        <input class="form-check-input" type="checkbox"
-                                                                            value="{{ $order->order_ID }}"
-                                                                            id="{{ $order->order_ID }}"
-                                                                            name="orders[]">
-                                                                        <label class="form-check-label" for="{{ $order->order_ID }}"></label>
-                                                                    </td>
-
-                                                                    <td>{{ $order->order_ID }}</td>
-                                                                    <td>{{ $order->order_GUID }}</td>
-                                                                    <td>{{ strtoupper($order->order_vendor_name) }}</td>
-                                                                    <td>{{ strtoupper($order->order_customer_name) }}</td>
-                                                                    <td>{{ strtoupper($order->order_product_style) }}</td>
-                                                                    <td>{{ strtoupper($order->order_product_color) }}</td>
-                                                                    <td>{{ implode(', ', $order->sub_products ?? []) }}</td>
-                                                                    <td>{{ $order->order_product_size }}</td>
-                                                                    <td>{{ $order->order_quantity }}</td>
-                                                                    <td>{{ $order->given_by_invntry }}</td>
-                                                                    <td>{{ $order->given_by_onway }}</td>
-                                                                    <td>{{ $order->order_cost }}</td>
-                                                                    <td>{{ $order->order_purchase_price }}</td>
-                                                                    <td>{{ explode(' ', $order->created_at)[0] }}</td>
-                                                                    <td>{{ $order->order_status == 'Pending' ? 'Accepted' : $order->order_status }}</td>
-                                                                    <td>{{ $order->purchase_id }}</td>
-                                                                    <td>{{ $order->order_wear_date }}</td>
-                                                                    <td>{{ $order->user_flag }}</td>
-
-                                                                    <td class="text-center">
-                                                                        <a target="_self"
-                                                                            class="btn btn-success mb-0 btn-sm"
-                                                                            href="{{ route('final-orders.edit', $order->final_ID) }}">
-                                                                            Edit
-                                                                        </a>
-
-                                                                        @if (auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1')
-                                                                            <a target="_self"
-                                                                                class="btn btn-danger mb-0 btn-sm"
-                                                                                href="{{ route('order-finals.delete-id', $order->order_ID) }}">
-                                                                                Delete
-                                                                            </a>
-                                                                        @endif
-
-                                                                        <input name="bypass" type="submit"
-                                                                            class="btn btn-warning mb-0 btn-sm"
-                                                                            value="Bypass"
-                                                                            onclick="javascript:document.getElementById('orderIDNew').value={{ $order->order_ID }};">
-
-                                                                        <input type="text" hidden name="orderID" value="{{ $order->final_ID }}">
-                                                                    </td>
-                                                                </tr>
-                                                            @endforeach
+                                                            {{-- Rows loaded via AJAX by DataTables (serverSide),
+                                                                 see getFinalOrdersData(). Nothing rendered here. --}}
                                                         </tbody>
                                                     </table>
                                                 </form>
@@ -162,41 +99,35 @@
                                             <div class="d-flex flex-column">
                                                 <button type="submit" form="orderForm"
                                                     formaction="{{ route('final-orders.confirm-customer') }}"
-                                                    class="btn btn-primary mb-2"
-                                                    onclick="xpandTablePrint()">
+                                                    class="btn btn-primary mb-2" onclick="xpandTablePrint()">
                                                     Confirm Orders to Customers
                                                 </button>
 
                                                 <button type="submit" form="orderForm"
                                                     formaction="{{ route('final-orders.confirm-vendor') }}"
-                                                    class="btn btn-primary"
-                                                    onclick="return xpandTablePrint2();">
+                                                    class="btn btn-primary" onclick="return xpandTablePrint2();">
                                                     Send Orders to Vendors
                                                 </button>
                                             </div>
 
                                             <div class="d-flex align-item-end">
                                                 <input type="date" form="orderForm" name="dateNow" id="dateNow"
-                                                    class="btn btn-primary"
-                                                    style="background:#fff;color: #5e239d;" />
+                                                    class="btn btn-primary" style="background:#fff;color: #5e239d;" />
                                             </div>
                                         </div>
 
                                         <div>
                                             <a href="{{ route('order-finals.download') }}"
-                                                class="btn btn-success float-right"
-                                                style="height: 43px; color:#fff;">
+                                                class="btn btn-success float-right" style="height: 43px; color:#fff;">
                                                 Download Final Order Data
                                             </a>
 
-                                            <a href="/refresh-final-orders"
-                                                class="btn btn-warning float-right mr-2"
+                                            <a href="/refresh-final-orders" class="btn btn-warning float-right mr-2"
                                                 style="height: 43px; color:#fff;">
                                                 Refresh Final Orders
                                             </a>
 
-                                            <button id="cancel-orders"
-                                                class="btn btn-warning float-right mr-2"
+                                            <button id="cancel-orders" class="btn btn-warning float-right mr-2"
                                                 style="color:#fff; background:#f8631d">
                                                 Cancel Orders
                                             </button>
@@ -228,6 +159,106 @@
 
         $(document).ready(function() {
             table = $('#example').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: {
+                    url: "{{ route('final-orders.datatable') }}",
+                    type: 'GET'
+                },
+                columns: [{
+                        data: 'checkbox',
+                        name: 'checkbox',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'order_id',
+                        name: 'order_ID'
+                    },
+                    {
+                        data: 'order_guid',
+                        name: 'order_GUID'
+                    },
+                    {
+                        data: 'vendor',
+                        name: 'order_vendor_name'
+                    },
+                    {
+                        data: 'customer',
+                        name: 'order_customer_name'
+                    },
+                    {
+                        data: 'style',
+                        name: 'order_product_style'
+                    },
+                    {
+                        data: 'color',
+                        name: 'order_product_color'
+                    },
+                    {
+                        data: 'sub_products',
+                        name: 'sub_products',
+                        orderable: false,
+                        searchable: false
+                    },
+                    {
+                        data: 'size',
+                        name: 'order_product_size'
+                    },
+                    {
+                        data: 'quantity',
+                        name: 'order_quantity'
+                    },
+                    {
+                        data: 'from_inventory',
+                        name: 'given_by_invntry'
+                    },
+                    {
+                        data: 'from_onway',
+                        name: 'given_by_onway'
+                    },
+                    {
+                        data: 'total_cost',
+                        name: 'order_cost'
+                    },
+                    {
+                        data: 'total_price',
+                        name: 'order_purchase_price'
+                    },
+                    {
+                        data: 'place_date',
+                        name: 'created_at'
+                    },
+                    {
+                        data: 'status',
+                        name: 'order_status'
+                    },
+                    {
+                        data: 'purchase_id',
+                        name: 'purchase_id'
+                    },
+                    {
+                        data: 'wear_date',
+                        name: 'order_wear_date'
+                    },
+                    {
+                        data: 'user',
+                        name: 'user_flag'
+                    },
+                    {
+                        data: 'actions',
+                        name: 'actions',
+                        orderable: false,
+                        searchable: false
+                    },
+                ],
+                // Applies the same row background-color rules the old Blade
+                // @php block computed per row, now sent as row_style in the JSON.
+                createdRow: function(row, data) {
+                    if (data.row_style) {
+                        $(row).attr('style', data.row_style);
+                    }
+                },
                 aLengthMenu: [
                     [25, 50, 100, 200, -1],
                     [25, 50, 100, 200, "All"]
@@ -244,7 +275,8 @@
 
                             var selected = [];
                             $(dt.$('input[type="checkbox"]').map(function() {
-                                selected.push($(this).prop("checked") ? $(this).closest('tr').index() : null);
+                                selected.push($(this).prop("checked") ? $(this)
+                                    .closest('tr').index() : null);
                             }));
 
                             if (selected.length === 0 || $.inArray(idx, selected) !== -1) {
@@ -267,10 +299,12 @@
                     },
                     customize: function(win) {
                         $(win.document.body).css('font-size', '11pt');
-                        $(win.document.body).find('table').addClass('compact').css('font-size', 'inherit');
+                        $(win.document.body).find('table').addClass('compact').css('font-size',
+                            'inherit');
 
                         var css = '@page { size: landscape; }',
-                            head = win.document.head || win.document.getElementsByTagName('head')[0],
+                            head = win.document.head || win.document.getElementsByTagName(
+                                'head')[0],
                             style = win.document.createElement('style');
 
                         style.type = 'text/css';

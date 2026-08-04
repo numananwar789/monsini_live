@@ -29,20 +29,15 @@ class OrderFinalController extends Controller
 {
     public function index()
     {
-
-
         if (auth()->check() && auth()->user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
-        // Check user role
         if (Auth::user()->admin_role == 'customer') {
             return redirect()->route('home');
         }
 
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
-
-        $orderList = OrderFinal::where('order_status', '!=', 'Placed')->get();
 
         $totOrderQuant = OrderFinal::where('order_status', '!=', 'Placed')->sum('order_quantity') ?? 0;
         $totOrderQuant_Comp = OrderFinal::where('order_status', '!=', 'Placed')
@@ -54,11 +49,152 @@ class OrderFinalController extends Controller
 
         return view('admin.final-orders.index', compact(
             'ownerComp',
-            'orderList',
             'totOrderQuant',
             'totOrderQuant_Comp',
             'totOrderQuant_Others'
         ));
+    }
+    
+    public function getFinalOrdersData(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 25);
+        $searchValue = trim((string) $request->input('search.value', ''));
+        $orderColumnIndex = $request->input('order.0.column');
+        $orderDir = strtolower($request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+        // Column index -> DB column, matching the <thead> order in the Blade view.
+        // 0 (checkbox), 7 (sub_products), 19 (actions) are intentionally omitted.
+        $sortableColumns = [
+            1 => 'order_ID',
+            2 => 'order_GUID',
+            3 => 'order_vendor_name',
+            4 => 'order_customer_name',
+            5 => 'order_product_style',
+            6 => 'order_product_color',
+            8 => 'order_product_size',
+            9 => 'order_quantity',
+            10 => 'given_by_invntry',
+            11 => 'given_by_onway',
+            12 => 'order_cost',
+            13 => 'order_purchase_price',
+            14 => 'created_at',
+            15 => 'order_status',
+            16 => 'purchase_id',
+            17 => 'order_wear_date',
+            18 => 'user_flag',
+        ];
+
+        $base = OrderFinal::where('order_status', '!=', 'Placed');
+
+        $recordsTotal = (clone $base)->count();
+
+        $query = clone $base;
+
+        if ($searchValue !== '') {
+            $query->where(function ($q) use ($searchValue) {
+                $q->where('order_GUID', 'like', "%{$searchValue}%")
+                    ->orWhere('order_vendor_name', 'like', "%{$searchValue}%")
+                    ->orWhere('order_customer_name', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_style', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_color', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_size', 'like', "%{$searchValue}%")
+                    ->orWhere('order_status', 'like', "%{$searchValue}%")
+                    ->orWhere('purchase_id', 'like', "%{$searchValue}%")
+                    ->orWhere('user_flag', 'like', "%{$searchValue}%");
+            });
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        if ($orderColumnIndex !== null && isset($sortableColumns[$orderColumnIndex])) {
+            $query->orderBy($sortableColumns[$orderColumnIndex], $orderDir);
+        } else {
+            $query->orderBy('order_ID', 'desc');
+        }
+
+        if ($length != -1) {
+            $query->offset($start)->limit($length);
+        }
+
+        $rows = $query->get();
+
+        $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
+        $canDelete = auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1';
+
+        $data = [];
+        foreach ($rows as $order) {
+
+            // Same row-coloring rules as the old Blade @php block (order matters —
+            // later conditions override earlier ones, same as the original).
+            $rowStyle = '';
+            if (str_contains(strtoupper((string) $order->order_customer_name), strtoupper((string) $ownerComp))) {
+                $rowStyle = 'background-color: #3f4d67; color:white;';
+            }
+            if ($order->given_by_invntry > 0) {
+                $rowStyle = 'background-color: rgb(0 100 12); color:white;';
+            }
+            if ($order->given_by_onway > 0) {
+                $rowStyle = 'background-color: rgb(209 198 0); color:black;';
+            }
+            if ($order->order_status == 'Confirmed to Customer') {
+                $rowStyle = 'background-color: #90EE90; color:black;';
+            }
+
+            $subProductsArr = [];
+            if (!empty($order->sub_products)) {
+                $decoded = is_array($order->sub_products)
+                    ? $order->sub_products
+                    : json_decode($order->sub_products, true);
+                if (is_array($decoded)) {
+                    $subProductsArr = $decoded;
+                }
+            }
+            $subProductsText = implode(', ', $subProductsArr);
+
+            $displayStatus = $order->order_status == 'Pending' ? 'Accepted' : $order->order_status;
+            $createdDate = $order->created_at ? explode(' ', (string) $order->created_at)[0] : '';
+
+            $actions = '<a target="_self" class="btn btn-success mb-0 btn-sm" href="' . route('final-orders.edit', $order->final_ID) . '">Edit</a>';
+            if ($canDelete) {
+                $actions .= ' <a target="_self" class="btn btn-danger mb-0 btn-sm" href="' . route('order-finals.delete-id', $order->order_ID) . '">Delete</a>';
+            }
+            $actions .= ' <input name="bypass" type="submit" class="btn btn-warning mb-0 btn-sm" value="Bypass" '
+                . 'onclick="javascript:document.getElementById(\'orderIDNew\').value=' . (int) $order->order_ID . ';">';
+            $actions .= '<input type="text" hidden name="orderID" value="' . e($order->final_ID) . '">';
+
+            $data[] = [
+                'checkbox' => '<input class="form-check-input" type="checkbox" value="' . e($order->order_ID) . '" id="chk_final_' . e($order->order_ID) . '" name="orders[]"><label class="form-check-label" for="chk_final_' . e($order->order_ID) . '"></label>',
+                'order_id' => e($order->order_ID),
+                'order_guid' => e($order->order_GUID),
+                'vendor' => strtoupper(e($order->order_vendor_name)),
+                'customer' => strtoupper(e($order->order_customer_name)),
+                'style' => strtoupper(e($order->order_product_style)),
+                'color' => strtoupper(e($order->order_product_color)),
+                'sub_products' => e($subProductsText),
+                'size' => e($order->order_product_size),
+                'quantity' => e($order->order_quantity),
+                'from_inventory' => e($order->given_by_invntry),
+                'from_onway' => e($order->given_by_onway),
+                'total_cost' => e($order->order_cost),
+                'total_price' => e($order->order_purchase_price),
+                'place_date' => e($createdDate),
+                'status' => e($displayStatus),
+                'purchase_id' => e($order->purchase_id),
+                'wear_date' => e($order->order_wear_date),
+                'user' => e($order->user_flag),
+                'actions' => $actions,
+                'row_style' => $rowStyle,
+            ];
+        }
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
     }
 
     public function confirmCustomer(Request $request)
@@ -151,7 +287,7 @@ class OrderFinalController extends Controller
 
             if (!$vendor) {
                 return redirect()->route('final-orders.index')
-                    ->with('error',  $vendorOrder->order_vendor_name . " Vendor Not Found");
+                    ->with('error', $vendorOrder->order_vendor_name . " Vendor Not Found");
             }
 
 
@@ -347,8 +483,8 @@ class OrderFinalController extends Controller
     //     return redirect()->route('final-orders.index')
     //         ->with('success', 'Orders sent to vendors');
     // }
-    
-        public function confirmVendor(Request $request)
+
+    public function confirmVendor(Request $request)
     {
         $request->validate([
             'orders' => 'required|array',
@@ -376,7 +512,7 @@ class OrderFinalController extends Controller
 
                 if (!$vendor) {
                     return redirect()->route('final-orders.index')
-                        ->with('error',  $vendorOrder->order_vendor_name . " Vendor Not Found");
+                        ->with('error', $vendorOrder->order_vendor_name . " Vendor Not Found");
                 }
 
                 $vendorPurchaseId = strtoupper($vendorOrder->order_vendor_name) . '_' . now()->format('d_M_Y') . '_' . config('app.name');
@@ -402,44 +538,44 @@ class OrderFinalController extends Controller
                     //     $sizes = [];
 
                     //     foreach ($colorOrders as $order) {
-                        
+
                     //         $size = $order->order_product_size;
                     //         dd($size);
-                        
+
                     //         // IMPORTANT: preserve "00" explicitly
                     //         if ($size === '00' || $size === 0 || $size === '0') {
                     //             $sizeKey = '00';
                     //         } else {
                     //             $sizeKey = (string) $size;
                     //         }
-                        
+
                     //         $sizes[$sizeKey] = ($sizes[$sizeKey] ?? 0) + $order->order_quantity;
                     //     }
 
                     //     $colorData[$color] = $sizes;
                     // }
-                    
+
                     foreach ($colorGroups as $color => $colorOrders) {
 
                         $sizes = [];
-                    
+
                         foreach ($colorOrders as $order) {
-                    
+
                             $size = (string) $order->order_product_size;
-                    
+
                             if ($size === '00') {
                                 $sizeKey = '00';
                             } else {
                                 $sizeKey = (string) $size;
                             }
-                    
+
                             if (!isset($sizes[$sizeKey])) {
                                 $sizes[$sizeKey] = 0;
                             }
-                    
+
                             $sizes[$sizeKey] += $order->order_quantity;
                         }
-                    
+
                         // THIS WAS MISSING
                         $colorData[$color] = $sizes;
                     }
@@ -448,9 +584,9 @@ class OrderFinalController extends Controller
                 }
 
                 $totalPrice = $orders->sum('order_cost');
-                
+
                 // dd($styleData);
-                
+
                 // $sizeHeaders = [];
 
                 // foreach ($styleData as $style => $colors) {
@@ -458,11 +594,11 @@ class OrderFinalController extends Controller
                 //         $sizeHeaders = array_unique(array_merge($sizeHeaders, array_keys($sizes)));
                 //     }
                 // }
-                
+
                 // sort($sizeHeaders);
-                
+
                 $sizeHeaders = ['00', '0', '2', '4', '6', '8', '10', '12', '14', '16', '18', '20', '22', '24', '26', '28'];
-                
+
                 Mail::to($vendor->vendor_email)
                     ->cc(config('mail.from.address'))
                     ->send(new VendorOrderNotification(
@@ -929,7 +1065,7 @@ class OrderFinalController extends Controller
             ->get();
 
 
-        $product = Product::where('product_style',  $order->order_product_style)->first();
+        $product = Product::where('product_style', $order->order_product_style)->first();
 
 
         $sub_products = $product && $product->sub_products ? $product->sub_products : [];
@@ -1012,7 +1148,7 @@ class OrderFinalController extends Controller
         return redirect()->route('final-orders.index')->with('success', 'Order updated successfully');
     }
 
-     public function deleteFinalOrder($orderID)
+    public function deleteFinalOrder($orderID)
     {
         try {
             // Delete from dt_order_final

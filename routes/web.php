@@ -134,6 +134,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/inventory/get-products/{style}', [InventoryController::class, 'getSubProducts'])->name('inventory.get-products');
     Route::get('/refresh-final-orders', [OrderFinalController::class, 'refresh'])->name('final-orders.refresh');
 
+    Route::get('/final-orders/datatable', [OrderFinalController::class, 'getFinalOrdersData'])->name('final-orders.datatable');
     Route::resource('/final-orders', OrderFinalController::class);
 
     Route::post('/admin/final-orders/confirm-customer', [OrderFinalController::class, 'confirmCustomer'])->name('final-orders.confirm-customer');
