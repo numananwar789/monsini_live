@@ -10,7 +10,7 @@
 @push('styles')
     <style>
         .bg-monsini {
-            background-color: #3f4d6794 !important; 
+            background-color: #3f4d6794 !important;
             color: white !important;;
         }
         .bg-inventory {
@@ -18,12 +18,12 @@
             color: white;
         }
         .bg-onway {
-            background-color: rgb(209 198 0) !important; 
+            background-color: rgb(209 198 0) !important;
             color: white !important;
         }
         .bg-bypass {
-            background-color: rgb(255, 157, 92) !important; 
-            color: white !important; 
+            background-color: rgb(255, 157, 92) !important;
+            color: white !important;
         }
 
         /* .table td, .table th {
@@ -36,7 +36,7 @@
 @section('content')
 
 
-    
+
 <div class="pcoded-main-container">
     <div class="pcoded-wrapper">
         <div class="pcoded-content">
@@ -63,7 +63,7 @@
 
                                               <style>
                                                     .bg-monsini {
-                                                        background-color: #3f4d6794 !important; 
+                                                        background-color: #3f4d6794 !important;
                                                         color: white !important;;
                                                     }
                                                     .bg-inventory {
@@ -71,12 +71,12 @@
                                                         color: white;
                                                     }
                                                     .bg-onway {
-                                                        background-color: rgb(209, 198, 0) !important; 
+                                                        background-color: rgb(209, 198, 0) !important;
                                                         color: white !important;
                                                     }
                                                     .bg-bypass {
-                                                        background-color: rgb(255, 157, 92) !important; 
-                                                        color: white !important; 
+                                                        background-color: rgb(255, 157, 92) !important;
+                                                        color: white !important;
                                                     }
 
                                                     /* .table td, .table th {
@@ -116,87 +116,6 @@
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        @foreach($orderList as $order)
-                                                            @php
-                                                                $rowClass = 'ss';
-                                                                $button = 'Allocate';
-                                                                $row_clr = '';
-                                                                if (str_contains(strtoupper($order->order_customer_name), strtoupper($ownerComp))) {
-                                                                    $rowClass = "bg-monsini";
-                                                                     $row_clr = "background-color: #3f4d67; color:white;";
-                                                                }
-                                                                if ($order->given_by_invntry > 0) {
-                                                                    $rowClass = "bg-inventory";
-                                                                    $row_clr = "background-color: rgb(0 100 12); color:white;";
-                                                                    $button = 'Allocate';
-                                                                }
-                                                                if ($order->given_by_onway > 0) {
-                                                                    $rowClass = "bg-onway";
-                                                                    $row_clr = "background-color: rgb(209 198 0); color:white;";
-                                                                    $button = 'Allocate';
-                                                                }
-                                                                if ($order->bypass == 1) {
-                                                                    $rowClass = "bg-bypass";
-                                                                    $row_clr = "background-color: rgb(255, 157, 92); color:white;";
-                                                                    $button = 'Allocate';
-                                                                }
-
-                                                     
-
-                                                            @endphp
-                                                            <tr class="{{ $rowClass }}" style="{{ $row_clr }}">
-                                                                <td style="text-align: center;vertical-align: middle;">
-                                                                    <input form="orderForm" class="form-check-input" type="checkbox" value="{{ $order->order_ID }}" id="{{ $order->order_ID }}" name="orders[]">
-                                                                    <label class="form-check-label" for="{{ $order->order_ID }}"></label>
-                                                                </td>
-                                                                <td>{{ $order->order_ID }}</td>
-                                                                <td>{{ $order->order_GUID }}</td>
-                                                                <td>{{ strtoupper($order->order_vendor_name) }}</td>
-                                                                <td>{{ strtoupper($order->vendor_purchase_ID) }}</td>
-                                                                <td>{{ strtoupper($order->order_customer_name) }}</td>
-                                                                <td>{{ strtoupper($order->order_product_style) }}</td>
-                                                                <td>{{ strtoupper($order->order_product_color) }}</td>
-                                                                <td>{{ $order->order_product_size }}</td>
-                                                                
-                                                                <td>
-    {{
-        is_array($order->sub_products)
-            ? implode(', ', $order->sub_products)
-            : $order->sub_products
-    }}
-</td>
-                                                                <td>{{ $order->order_quantity }}</td>
-                                                                <td>{{ $order->given_by_invntry }}</td>
-                                                                <td>{{ $order->given_by_onway }}</td>
-                                                                <td>{{ $order->order_cost }}</td>
-                                                                <td>{{ $order->order_purchase_price }}</td>
-                                                                <td>{{ \Carbon\Carbon::parse($order->created_at)->format('Y-m-d') }}</td>
-                                                                <td>{{ $order->order_status == "Pending" ? "Confirmed" : $order->order_status }}</td>
-                                                                <td>{{ $order->purchase_id }}</td>
-                                                                <td>{{ $order->order_wear_date }}</td>
-                                                                <td>{{ $order->user_flag }}</td>
-                                                                <td>{{ $order->staging_date }}</td>
-                                                                <td class="text-center">
-                                                                    <a target="_self" class="btn btn-success mb-0 btn-sm" href="{{ route('order-allocations.edit', $order->order_ID) }}">Edit</a>
-                                                                    @if(auth()->user()->admin_role == "superadmin" || auth()->user()->user_name == "admin1")
-                                                                        @if($order->given_by_invntry > 0 || $order->given_by_onway > 0)
-                                                                            <a target="_self" class="btn btn-danger mb-0 btn-sm" href="{{ route('order-allocation.delete', $order->order_ID) }}" onclick="return confirm('Are you sure you want to delete this order?')">Delete</a>
-                                                                        @else
-                                                                            <a target="_self" class="btn btn-danger mb-0 btn-sm" href="{{ route('order-allocation.delete-full', $order->order_ID) }}" onclick="return confirm('Are you sure you want to delete this order and its related records?')">Delete</a>
-                                                                        @endif
-                                                                    @endif
-                                                                    <a target="_self" class="{{ $order->staging_flag == 'Yes' ? 'btn btn-warning mb-0 btn-sm' : 'btn btn-success mb-0 btn-sm' }}" href="{{ route('order-allocation.toggle-staging', $order->order_ID) }}">{{ $order->staging_flag == 'Yes' ? 'Incoming' : 'Send to Staging' }}</a>
-                                                                    <input type="text" style="display:none" name="orderID" value="{{ $order->order_ID }}">
-                                                                </td>
-                                                                <td>
-                                                                      <input type="button" class="btn btn-info mb-0 btn-sm" 
-                                                                            data-toggle="modal" data-target="#order_model" 
-                                                                            name="{{ $order->order_ID }}" 
-                                                                            value="Allocate" 
-                                                                            onclick="fillModal(this)">
-                                                                </td>
-                                                            </tr>
-                                                        @endforeach
                                                     </tbody>
                                                     <tfoot>
                                                         <tr>
@@ -312,10 +231,7 @@
 @endsection
 
 @section('page-js')
-    {{-- <script src="https://code.jquery.com/jquery-3.6.0.js" integrity="sha256-H+K7U5CnXl1h5ywQfKtSj8PCmoN9aaq30gDh27Xc0jk=" crossorigin="anonymous"></script>
-    <script src="/assets/plugins/bootstrap/js/bootstrap.min.js"></script> --}}
 
-    
 <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.2/moment.min.js"></script>
 <script src="https://cdn.datatables.net/datetime/1.1.2/js/dataTables.dateTime.min.js"></script>
@@ -339,56 +255,59 @@
 
     var table;
     $(document).ready(function() {
-        // table = $('#example').DataTable({
-        //     aLengthMenu: [
-        //         [25, 50, 100, 200, -1],
-        //         [25, 50, 100, 200, "All"]
-        //     ],
-        //     dom: 'lBfrtip',
-        //     buttons: [{
-        //         extend: 'print',
-        //         autoPrint: true,
-        //         text: 'Print',
-        //         exportOptions: {
-        //             // Your requested specific columns
-        //             columns: [1, 4, 5, 6, 7, 8, 9, 10, 17]
-        //         },
-        //         customize: function(win) {
-        //             var sheet = win.document.styleSheets[0];
-                    
-        //             // 1. Force Landscape and remove unnecessary browser margins
-        //             $(win.document.body).css('font-size', '10pt').css('margin', '0').css('padding', '0');
-                    
-        //             // 2. Style the table for maximum space efficiency
-        //             $(win.document.body).find('table')
-        //                 .addClass('compact')
-        //                 .css('width', '100%')
-        //                 .css('table-layout', 'auto') // Allows browser to calculate best fit
-        //                 .css('font-size', 'inherit');
-            
-        //             // 3. Define specific column behaviors via CSS injection
-        //             var style = win.document.createElement('style');
-        //             style.type = 'text/css';
-        //             style.innerHTML = `
-        //                 @page { size: landscape; margin: 0.5cm; }
-        //                 table { border-collapse: collapse !important; }
-        //                 th, td { 
-        //                     padding: 4px !important; 
-        //                     border: 1px solid #ddd !important;
-        //                     word-wrap: break-word;
-        //                     white-space: normal !important;
-        //                 }
-        //                 th:nth-child(1), td:nth-child(1) { width: 50px; }
-        //                 th:nth-child(6), td:nth-child(6) { width: 40px; }
-        //                 th:nth-child(8), td:nth-child(8) { width: 40px; }
-        //                 th:nth-child(2), td:nth-child(2) { max-width: 150px; }
-        //             `;
-        //             win.document.head.appendChild(style);
-        //         }
-        //     }]
-        // });
-        
+
         table = $('#example').DataTable({
+            processing: true,
+            serverSide: true,
+
+            ajax: "{{ route('order-allocations.data') }}",
+
+            columns: [
+                {
+                    data: 'checkbox',
+                    name: 'checkbox',
+                    orderable: false,
+                    searchable: false
+                },
+                { data: 'order_id',           name: 'order_ID' },
+                { data: 'order_guid',         name: 'order_GUID' },
+                { data: 'vendor',             name: 'order_vendor_name' },
+                { data: 'vendor_purchase_id', name: 'vendor_purchase_ID' },
+                { data: 'customer',           name: 'order_customer_name' },
+                { data: 'style',              name: 'order_product_style' },
+                { data: 'color',              name: 'order_product_color' },
+                { data: 'size',               name: 'order_product_size' },
+                { data: 'sub_products',       name: 'sub_products', orderable: false },
+                { data: 'quantity',           name: 'order_quantity' },
+                { data: 'inventory',          name: 'given_by_invntry' },
+                { data: 'onway',              name: 'given_by_onway' },
+                { data: 'cost',               name: 'order_cost' },
+                { data: 'price',              name: 'order_purchase_price' },
+                { data: 'date',               name: 'created_at' },
+                { data: 'status',             name: 'order_status' },
+                { data: 'purchase_id',        name: 'purchase_id' },
+                { data: 'wear_date',          name: 'order_wear_date' },
+                { data: 'user',               name: 'user_flag' },
+                { data: 'staging_date',       name: 'staging_date' },
+                {
+                    data: 'actions',
+                    name: 'actions',
+                    orderable: false,
+                    searchable: false
+                },
+                {
+                    data: 'allocate',
+                    name: 'allocate',
+                    orderable: false,
+                    searchable: false
+                }
+            ],
+
+            createdRow: function (row, data) {
+                if (data.row_style) {
+                    $(row).attr('style', data.row_style);
+                }
+            },
             aLengthMenu: [
                 [25, 50, 100, 200, -1],
                 [25, 50, 100, 200, "All"]
@@ -404,34 +323,34 @@
                     rows: function (idx, data, node) {
                         // Check if any boxes are selected. If none, print all (or change to return false to print nothing)
                         var hasChecked = $('input[type="checkbox"][name="orders[]"]:checked').length > 0;
-                        if (!hasChecked) return true; 
-        
+                        if (!hasChecked) return true;
+
                         // Return true only for rows where the checkbox is checked
                         return $(node).find('input[type="checkbox"]').is(':checked');
                     }
                 },
                 customize: function(win) {
                     $(win.document.body).css('font-size', '8pt').css('margin', '0');
-                    
+
                     $(win.document.body).find('table')
                         .addClass('compact')
                         .css('width', '100%');
-                
+
                     var style = win.document.createElement('style');
                     style.type = 'text/css';
                     style.innerHTML = `
                             @page { size: landscape; margin: 0.2cm; } /* Minimal margins */
-                            
-                            table { 
-                                border-collapse: collapse !important; 
+
+                            table {
+                                border-collapse: collapse !important;
                                 table-layout: auto !important; /* Allows cells to wrap to their natural width */
-                                width: 100% !important; 
+                                width: 100% !important;
                                 font-size: 10pt !important; /* Tiny font to squeeze data */
                             }
-                            
-                            th, td { 
-                                padding: 1px 2px !important; 
-                                border: 1px solid #ddd !important; 
+
+                            th, td {
+                                padding: 1px 2px !important;
+                                border: 1px solid #ddd !important;
                                 white-space: nowrap !important; /* Forces everything on one line */
                                 overflow: visible !important; /* Ensures no hidden content */
                             }
@@ -469,7 +388,7 @@
     //     var order_ID_JS = e.name;
     //     $('#exampleModalLabel').html("Allocation for Order ID: " + order_ID_JS);
     //     document.getElementById('orderIDNow').value = order_ID_JS;
-        
+
     //     // Get order data from the table row
     //     var row = $(e).closest('tr');
     //     $('#_venName').html(row.find('td:eq(3)').text());
@@ -486,10 +405,10 @@
 
         function fillModal(button) {
         const orderId = button.name;
-        
+
         // Set form action
         $('#allocationForm').attr('action', `/order-allocations-allocate/${orderId}/allocate`);
-        
+
         // Load order data via AJAX
             $.get(`/order-allocations-show/${orderId}/show`, function(data) {
                 $('#_venName').text(data.venName);
@@ -502,14 +421,14 @@
                 $('#_ordQuant').text(data.ordQuant);
                 $('#_fromIn').text(data.fromIn);
                 $('#_fromONW').text(data.fromONW);
-                
+
                 // Set max value for allocation input
                 $('#placed_order').attr('max', data.ordQuant);
             }).fail(function() {
                 alert('Failed to load order data');
             });
         }
- 
+
     function getCheckedOrderIDs() {
         const orderIDs = [];
         const checkboxes = document.querySelectorAll('input[type="checkbox"][name="orders[]"]:checked');

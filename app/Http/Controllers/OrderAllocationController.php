@@ -11,10 +11,6 @@ use App\Models\Product;
 use App\Models\Vendor;
 use App\Models\OrderFinal;
 use Illuminate\Http\Request;
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
-
 use App\Models\EmailBody as EmailTemplate;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\DB;
@@ -23,21 +19,17 @@ use Illuminate\Support\Facades\Auth;
 
 class OrderAllocationController extends Controller
 {
-
-
     public function index()
     {
-
-
         if (auth()->check() && auth()->user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
 
-        $orderList = OrderAllocation::where('order_status', '!=', 'Allocated')
-            ->orderBy('allocation_ID', 'DESC')
-            ->get();
+        // $orderList = OrderAllocation::where('order_status', '!=', 'Allocated')
+        //     ->orderBy('allocation_ID', 'DESC')
+        //     ->get();
 
         $totOrderQuant = OrderAllocation::where('order_status', '!=', 'Allocated')
             ->sum('order_quantity') ?? 0;
@@ -58,10 +50,10 @@ class OrderAllocationController extends Controller
         $totOrderQuant_OnWay_Monsini = OrderAllocation::where('order_status', '!=', 'Allocated')
             ->where('order_customer_name', $ownerComp)
             ->sum('order_quantity') ?? 0;
-            // ->count();
+        // ->count();
 
         return view('order-allocations.index', compact(
-            'orderList',
+            // 'orderList',
             'ownerComp',
             'totOrderQuant',
             'totOrderQuant_Simple',
@@ -69,6 +61,173 @@ class OrderAllocationController extends Controller
             'totOrderQuant_OnWay',
             'totOrderQuant_OnWay_Monsini'
         ));
+    }
+
+    public function getOrderAllocationsData(Request $request)
+    {
+        $draw = (int) $request->input('draw', 1);
+        $start = (int) $request->input('start', 0);
+        $length = (int) $request->input('length', 25);
+
+        $searchValue = trim($request->input('search.value', ''));
+
+        $orderColumn = $request->input('order.0.column');
+        $orderDir = strtolower($request->input('order.0.dir', 'desc')) == 'asc'
+            ? 'asc'
+            : 'desc';
+
+        $sortableColumns = [
+            1 => 'order_ID',
+            2 => 'order_GUID',
+            3 => 'order_vendor_name',
+            4 => 'vendor_purchase_ID',
+            5 => 'order_customer_name',
+            6 => 'order_product_style',
+            7 => 'order_product_color',
+            8 => 'order_product_size',
+            10 => 'order_quantity',
+            11 => 'given_by_invntry',
+            12 => 'given_by_onway',
+            13 => 'order_cost',
+            14 => 'order_purchase_price',
+            15 => 'created_at',
+            16 => 'order_status',
+            17 => 'purchase_id',
+            18 => 'order_wear_date',
+            19 => 'user_flag',
+            20 => 'staging_date',
+        ];
+
+        $base = OrderAllocation::where('order_status', '!=', 'Allocated');
+
+        $recordsTotal = (clone $base)->count();
+
+        $query = clone $base;
+
+        if ($searchValue != '') {
+
+            $query->where(function ($q) use ($searchValue) {
+
+                $q->where('order_GUID', 'like', "%{$searchValue}%")
+                    ->orWhere('purchase_id', 'like', "%{$searchValue}%")
+                    ->orWhere('vendor_purchase_ID', 'like', "%{$searchValue}%")
+                    ->orWhere('order_customer_name', 'like', "%{$searchValue}%")
+                    ->orWhere('order_vendor_name', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_style', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_color', 'like', "%{$searchValue}%")
+                    ->orWhere('order_product_size', 'like', "%{$searchValue}%")
+                    ->orWhere('order_status', 'like', "%{$searchValue}%")
+                    ->orWhere('user_flag', 'like', "%{$searchValue}%");
+
+            });
+
+        }
+
+        $recordsFiltered = (clone $query)->count();
+
+        if (isset($sortableColumns[$orderColumn])) {
+            $query->orderBy($sortableColumns[$orderColumn], $orderDir);
+        } else {
+            $query->orderByDesc('allocation_ID');
+        }
+
+        if ($length != -1) {
+            $query->offset($start)->limit($length);
+        }
+
+        $rows = $query->get();
+
+        $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
+
+        $data = [];
+
+        foreach ($rows as $order) {
+
+            $rowStyle = '';
+
+            if ($order->bypass == 1) {
+                $rowStyle = 'background-color:#d9534f;color:white;';
+            } elseif ($order->given_by_onway > 0) {
+                $rowStyle = 'background-color:rgb(209,198,0);color:black;';
+            } elseif ($order->given_by_invntry > 0) {
+                $rowStyle = 'background-color:rgb(0,100,12);color:white;';
+            } elseif (strtoupper($order->order_customer_name) == strtoupper($ownerComp)) {
+                $rowStyle = 'background-color:#3f4d67;color:white;';
+            }
+
+            $subProducts = '';
+
+            if (!empty($order->sub_products)) {
+
+                $decoded = is_array($order->sub_products)
+                    ? $order->sub_products
+                    : json_decode($order->sub_products, true);
+
+                if (is_array($decoded)) {
+                    $subProducts = implode(', ', $decoded);
+                }
+
+            }
+
+            $allocateButton =
+                '<input type="button"
+                    class="btn btn-info btn-sm"
+                    value="Allocate"
+                    name="' . $order->order_ID . '"
+                    onclick="fillModal(this)"
+                    data-toggle="modal"
+                    data-target="#order_model">';
+
+            $actions =
+                '<a class="btn btn-success btn-sm"
+                href="' . route('order-allocations.edit', $order->order_ID) . '">
+                Edit
+            </a>';
+
+            $data[] = [
+
+                'checkbox' =>
+                    '<input class="form-check-input"
+                        type="checkbox"
+                        value="' . $order->order_ID . '"
+                        name="orders[]">',
+
+                'order_id' => $order->order_ID,
+                'order_guid' => $order->order_GUID,
+                'vendor' => strtoupper($order->order_vendor_name),
+                'vendor_purchase_id' => $order->vendor_purchase_ID,
+                'customer' => strtoupper($order->order_customer_name),
+                'style' => strtoupper($order->order_product_style),
+                'color' => strtoupper($order->order_product_color),
+                'size' => $order->order_product_size,
+                'sub_products' => $subProducts,
+                'quantity' => $order->order_quantity,
+                'inventory' => $order->given_by_invntry,
+                'onway' => $order->given_by_onway,
+                'cost' => $order->order_cost,
+                'price' => $order->order_purchase_price,
+                'date' => optional($order->created_at)->format('Y-m-d'),
+                'status' => $order->order_status == 'Pending'
+                    ? 'Confirmed'
+                    : $order->order_status,
+                'purchase_id' => $order->purchase_id,
+                'wear_date' => $order->order_wear_date,
+                'user' => $order->user_flag,
+                'staging_date' => $order->staging_date,
+                'actions' => $actions,
+                'allocate' => $allocateButton,
+                'row_style' => $rowStyle,
+
+            ];
+
+        }
+
+        return response()->json([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsFiltered,
+            'data' => $data,
+        ]);
     }
 
     public function confirmToCustomer(Request $request)
@@ -154,26 +313,26 @@ class OrderAllocationController extends Controller
 
         try {
             // $ordersToAllocate = OrderAllocation::whereIn('order_ID', $request->orders)->get();
-            
+
             $ordersToAllocate = OrderAllocation::whereIn('order_ID', $request->orders)
                 ->where('order_status', '!=', 'Allocated')  // ADD THIS
                 ->get();
-            
+
             foreach ($ordersToAllocate as $order) {
                 // $order->created_at = now();
                 // OrderHistory::create($order->toArray());
-                
+
                 $historyData = $order->toArray();
                 $historyData['created_at'] = now();
-            
-                $historyData['created_at_final'] = 
-                    (empty($historyData['created_at_final']) || $historyData['created_at_final'] === '0000-00-00 00:00:00') 
+
+                $historyData['created_at_final'] =
+                    (empty($historyData['created_at_final']) || $historyData['created_at_final'] === '0000-00-00 00:00:00')
                     ? null : $historyData['created_at_final'];
-            
-                $historyData['created_at_allocation'] = 
-                    (empty($historyData['created_at_allocation']) || $historyData['created_at_allocation'] === '0000-00-00 00:00:00') 
+
+                $historyData['created_at_allocation'] =
+                    (empty($historyData['created_at_allocation']) || $historyData['created_at_allocation'] === '0000-00-00 00:00:00')
                     ? null : $historyData['created_at_allocation'];
-            
+
                 OrderHistory::create($historyData);
             }
 
@@ -480,41 +639,41 @@ class OrderAllocationController extends Controller
             // Use raw query to match your exact logic
             DB::insert("
             INSERT INTO `dt_order_allocation_cancel`(
-                `allocation_ID`, 
-                `final_ID`, 
-                `order_ID`, 
-                `order_customer_ID`, 
-                `order_customer_name`, 
-                `order_vendor_ID`, 
-                `order_vendor_name`, 
-                `vendor_purchase_ID`, 
-                `order_product_ID`, 
-                `order_product_style`, 
-                `order_product_color`, 
-                `order_product_size`, 
-                `order_quantity`, 
-                `given_by_invntry`, 
-                `given_by_onway`, 
-                `order_cost`, 
-                `order_purchase_price`, 
-                `order_note`, 
-                `purchase_id`, 
-                `created_at`, 
-                `created_at_final`, 
-                `created_at_allocation`, 
-                `onway_vndr_prchs_ids`, 
-                `onway_cstmr_prchs_ids`, 
-                `order_status`, 
-                `bypass`, 
-                `order_wear_date`, 
-                `user_flag`, 
-                `order_GUID`, 
-                `staging_flag`, 
+                `allocation_ID`,
+                `final_ID`,
+                `order_ID`,
+                `order_customer_ID`,
+                `order_customer_name`,
+                `order_vendor_ID`,
+                `order_vendor_name`,
+                `vendor_purchase_ID`,
+                `order_product_ID`,
+                `order_product_style`,
+                `order_product_color`,
+                `order_product_size`,
+                `order_quantity`,
+                `given_by_invntry`,
+                `given_by_onway`,
+                `order_cost`,
+                `order_purchase_price`,
+                `order_note`,
+                `purchase_id`,
+                `created_at`,
+                `created_at_final`,
+                `created_at_allocation`,
+                `onway_vndr_prchs_ids`,
+                `onway_cstmr_prchs_ids`,
+                `order_status`,
+                `bypass`,
+                `order_wear_date`,
+                `user_flag`,
+                `order_GUID`,
+                `staging_flag`,
                 `staging_date`,
                 `sub_products`
-            ) 
-            SELECT * 
-            FROM dt_order_allocation 
+            )
+            SELECT *
+            FROM dt_order_allocation
             WHERE order_ID IN ('" . $orderIDs . "')
         ");
 
@@ -527,10 +686,6 @@ class OrderAllocationController extends Controller
 
     public function deleteAllocated($id)
     {
-        // if (auth()->guest() || auth()->user()->admin_role === 'customer') {
-        //     return redirect('/');
-        // }
-
         try {
             DB::transaction(function () use ($id) {
                 $ownerComp = DB::table('dt_cust')->where('cust_owner', 'Yes')->value('cust_comp_name');
@@ -630,10 +785,9 @@ class OrderAllocationController extends Controller
             return redirect()->route('home');
         }
 
-        // $order = OrderAllocation::where("order_ID", $id)->first();
         $order = OrderAllocation::where("order_ID", $id)
-        ->whereNot("order_status", "Allocated")
-        ->first();
+            ->whereNot("order_status", "Allocated")
+            ->first();
 
         $ownerCompany = "";
         $ownerCompany1 = Customer::where('cust_owner', 'Yes')->first();
@@ -647,19 +801,9 @@ class OrderAllocationController extends Controller
             ->distinct('product_color')
             ->pluck('product_color');
 
-        // $sizeRange = Product::where('product_style', $order->order_product_style)
-        //     ->first()->product_size_range;
-        
-        $sizeRange = Product::where('product_style', $order->order_product_style)
-            ->value('product_size_range');
-        
-        // dd($sizeRange);
+        $sizeRange = Product::where('product_style', $order->order_product_style)->value('product_size_range');
 
-        // $costProduct = Product::where('product_style', $order->order_product_style)
-        //     ->first()->product_wholesale_price;
-        
-        $costProduct = Product::where('product_style', $order->order_product_style)
-    ->value('product_wholesale_price');
+        $costProduct = Product::where('product_style', $order->order_product_style)->value('product_wholesale_price');
 
         $vendors = Vendor::select('vendor_ID', 'vendor_comp_name')->get();
         $customers = Customer::orderBy('cust_comp_name', 'asc')->get(['cust_ID', 'cust_comp_name']);
@@ -670,8 +814,7 @@ class OrderAllocationController extends Controller
             ->distinct()
             ->get();
 
-
-        $product = Product::where('product_style',  $order->order_product_style)->first();
+        $product = Product::where('product_style', $order->order_product_style)->first();
         $sub_products = $product && $product->sub_products ? $product->sub_products : [];
         $subProducts = is_string($sub_products)
             ? json_decode($sub_products, true)
@@ -705,7 +848,7 @@ class OrderAllocationController extends Controller
             'note' => 'nullable|string',
             'customers' => 'required|string'
         ]);
-        
+
         // dd($request);
 
         // Get product info
@@ -723,7 +866,7 @@ class OrderAllocationController extends Controller
         // Get customer info
         $customer = Customer::where('cust_comp_name', $request->customers)->firstOrFail();
 
-        $order  = OrderAllocation::where("order_ID", $id)->first();
+        $order = OrderAllocation::where("order_ID", $id)->first();
         // Update all three related order tables
         $this->updateOrderTables(
             $order->order_ID,
@@ -773,7 +916,7 @@ class OrderAllocationController extends Controller
         $order = OrderAllocation::where("order_ID", $id)->first();
 
         if (!$order) {
-            return  abort(404, 'Not Found.');
+            return abort(404, 'Not Found.');
         }
 
         return response()->json([

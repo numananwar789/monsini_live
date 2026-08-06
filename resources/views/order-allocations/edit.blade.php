@@ -2,8 +2,6 @@
 
 @section('title', 'Edit Order Allocation')
 
-
-
 @section('content')
     <div class="pcoded-main-container">
         <div class="pcoded-wrapper">
@@ -68,57 +66,35 @@
                                                 <div class="row mt-4">
                                                     <div class="col">
                                                         <label for="size">Product Size</label>
-<select required name="size" id="size" class="form-control"
-    aria-label="Default select example">
+                                                        <select required name="size" id="size" class="form-control"
+                                                            aria-label="Default select example">
+                                                            @php
+                                                                $sizeExploded = explode('-', $sizeRange ?? '');
+                                                                $sizeMinRaw = isset($sizeExploded[0]) ? trim($sizeExploded[0]) : '0';
+                                                                $sizeMaxRaw = isset($sizeExploded[1]) ? trim($sizeExploded[1]) : '0';
+                                                                $sizeMin = (int)$sizeMinRaw;
+                                                                $sizeMax = (int)$sizeMaxRaw;
+                                                                $currentSize = trim((string)$order->order_product_size);
+                                                                $startsWithDoubleZero = ($sizeMinRaw === '00');
+                                                            @endphp
 
-@php
-    $sizeExploded = explode('-', $sizeRange ?? '');
+                                                            @if($startsWithDoubleZero)
+                                                                <option value="00"
+                                                                    @if($currentSize === '00') selected @endif>
+                                                                    00
+                                                                </option>
+                                                            @endif
 
-    $sizeMinRaw = isset($sizeExploded[0]) ? trim($sizeExploded[0]) : '0';
-    $sizeMaxRaw = isset($sizeExploded[1]) ? trim($sizeExploded[1]) : '0';
-
-    // INTEGER VALUES
-    $sizeMin = (int)$sizeMinRaw;
-    $sizeMax = (int)$sizeMaxRaw;
-
-    // CURRENT ORDER SIZE
-    $currentSize = trim((string)$order->order_product_size);
-
-    // CHECK IF RANGE STARTS WITH 00
-    $startsWithDoubleZero = ($sizeMinRaw === '00');
-@endphp
-
-    {{-- ========================================= --}}
-    {{-- ADD 00 OPTION --}}
-    {{-- ========================================= --}}
-    @if($startsWithDoubleZero)
-
-        <option value="00"
-            @if($currentSize === '00') selected @endif>
-            00
-        </option>
-
-    @endif
-
-    {{-- ========================================= --}}
-    {{-- NORMAL LOOP --}}
-    {{-- ========================================= --}}
-    @for ($iNow = $sizeMin; $iNow <= $sizeMax; $iNow += 2)
-
-        @php
-            $loopSize = (string)$iNow;
-        @endphp
-
-        <option value="{{ $loopSize }}"
-            @if($currentSize === $loopSize) selected @endif>
-
-            {{ $loopSize }}
-
-        </option>
-
-    @endfor
-
-</select>
+                                                            @for ($iNow = $sizeMin; $iNow <= $sizeMax; $iNow += 2)
+                                                                @php
+                                                                    $loopSize = (string)$iNow;
+                                                                @endphp
+                                                                <option value="{{ $loopSize }}"
+                                                                    @if($currentSize === $loopSize) selected @endif>
+                                                                    {{ $loopSize }}
+                                                                </option>
+                                                            @endfor
+                                                        </select>
                                                     </div>
                                                     <div class="col">
                                                         <label for="quantity">Order Quantity</label>
@@ -160,7 +136,6 @@
                                                             value="{{ $order->order_wear_date }}">
                                                     </div>
 
-
                                                     <div class="col-md-6">
                                                         <div class="form-group">
                                                             <label for="sub_products">Sub Products</label>
@@ -168,16 +143,29 @@
                                                                 class="form-control @error('sub_products') is-invalid @enderror"
                                                                 id="sub_products" name="sub_products[]" multiple>
                                                                 @php
+                                                                    // Handle sub_products properly
+                                                                    $selectedSubProducts = old('sub_products', $order->sub_products ?? []);
 
-                                                                    $selectedSubProducts = old(
-                                                                        'sub_products',
-                                                                        $order->sub_products ?? [],
-                                                                    );
+                                                                    // If it's a string, try to decode or convert
+                                                                    if (is_string($selectedSubProducts)) {
+                                                                        $decoded = json_decode($selectedSubProducts, true);
+                                                                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                                                                            $selectedSubProducts = $decoded;
+                                                                        } else {
+                                                                            // Try comma-separated
+                                                                            $selectedSubProducts = array_map('trim', explode(',', $selectedSubProducts));
+                                                                        }
+                                                                    }
+
+                                                                    // Ensure it's an array
+                                                                    if (!is_array($selectedSubProducts)) {
+                                                                        $selectedSubProducts = [];
+                                                                    }
                                                                 @endphp
 
                                                                 @foreach ($subProducts as $sub)
                                                                     <option value="{{ $sub }}"
-                                                                        {{ in_array($sub, $selectedSubProducts ?? []) ? 'selected' : '' }}>
+                                                                        {{ in_array($sub, $selectedSubProducts) ? 'selected' : '' }}>
                                                                         {{ $sub }}
                                                                     </option>
                                                                 @endforeach
@@ -204,39 +192,35 @@
     </div>
 @endsection
 
-
 @section('page-js')
-    {{-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script> --}}
-
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-
 
     <script>
         $(document).ready(function() {
             let costProd = {{ $costProduct }};
             let currentColor = "{{ $order->order_product_color }}".toUpperCase();
+            let currentStyle = "{{ $order->order_product_style }}";
 
             $('#sub_products').select2({
                 placeholder: "Select sub-products",
                 allowClear: true
             });
 
-            // Get colors on style change
-            $('#style').change(function() {
+            function updateColors(style, selectedColor) {
                 $.ajax({
                     type: 'POST',
                     url: '{{ route('get.color') }}',
                     data: {
-                        style: $(this).val(),
+                        style: style,
                         _token: '{{ csrf_token() }}'
                     },
                     success: function(data) {
                         $('#color').html(data);
-                        // Set current color if available
-                        if (currentColor) {
+                        if (selectedColor) {
+                            let colorToSelect = selectedColor.toUpperCase();
                             $('#color option').each(function() {
-                                if ($(this).val().toUpperCase() === currentColor) {
+                                if ($(this).val().toUpperCase() === colorToSelect) {
                                     $(this).prop('selected', true);
                                     return false;
                                 }
@@ -244,27 +228,25 @@
                         }
                     }
                 });
-            });
+            }
 
-            // Get vendor name on style change
-            $('#style').change(function() {
-                let vxp = @json($vxp);
+            function updateVendor(style) {
+                let vxp = @json($vxp ?? []);
                 for (let i = 0; i < vxp.length; i++) {
                     let opt = vxp[i];
-                    if (opt.product_style == $(this).val()) {
+                    if (opt.product_style == style) {
                         $('#vendorsName').val(opt.product_vendor_name.toUpperCase());
                         break;
                     }
                 }
-            });
+            }
 
-            // Get cost on style change        
-            $('#style').change(function() {
+            function updateCost(style) {
                 $.ajax({
                     type: 'POST',
                     url: '{{ route('get.product.price') }}',
                     data: {
-                        style: $(this).val(),
+                        style: style,
                         _token: '{{ csrf_token() }}'
                     },
                     success: function(data) {
@@ -272,35 +254,43 @@
                         updatePrice();
                     }
                 });
-            });
+            }
 
-            // Get sizes on style change
-            $('#style').change(function() {
-                let style_get = $('#style').val();
-                if (style_get) {
+            function updateSizes(style) {
+                if (style) {
                     $.ajax({
                         url: "{{ route('get.size') }}",
                         type: "POST",
                         dataType: "JSON",
                         data: {
-                            style_get: style_get,
+                            style_get: style,
                             _token: '{{ csrf_token() }}'
                         },
                         success: function(response) {
                             let min_val = response.min;
                             let max_val = response.max;
+                            let currentSize = "{{ $order->order_product_size }}";
 
-                            $('#size').empty().append('<option value="">Choose Size</option>');
+                            $('#size').empty();
+
+                            let startsWithDoubleZero = (min_val === '00');
+
+                            if (startsWithDoubleZero) {
+                                $('#size').append('<option value="00" ' +
+                                    (currentSize === '00' ? 'selected' : '') + '>00</option>');
+                                min_val = 0;
+                            }
+
                             for (let i = parseInt(min_val); i <= parseInt(max_val); i += 2) {
-                                $('#size').append('<option value="' + i + '">' + i +
-                                    '</option>');
+                                let sizeValue = i.toString();
+                                let isSelected = (currentSize === sizeValue) ? 'selected' : '';
+                                $('#size').append('<option value="' + sizeValue + '" ' + isSelected + '>' + sizeValue + '</option>');
                             }
                         }
                     });
                 }
-            });
+            }
 
-            // Update price calculation
             function updatePrice() {
                 const sizeProd = $('#size').val() || 0;
                 const quantity = $('#quantity').val() || 0;
@@ -312,18 +302,44 @@
                 }
             }
 
-            $('#quantity').on('keyup change', updatePrice);
-            $('#size').on('change', updatePrice);
-
             $('#style').change(function() {
                 const style = $(this).val();
                 if (style) {
+                    updateColors(style, null);
+                    updateVendor(style);
+                    updateCost(style);
+                    updateSizes(style);
+
                     $.get("/inventory/get-products/" + style, function(data) {
+                        let selectedSubs = @json($order->sub_products ?? []);
+                        // Ensure selectedSubs is an array
+                        if (typeof selectedSubs === 'string') {
+                            try {
+                                selectedSubs = JSON.parse(selectedSubs);
+                            } catch(e) {
+                                selectedSubs = selectedSubs.split(',').map(s => s.trim());
+                            }
+                        }
+                        if (!Array.isArray(selectedSubs)) {
+                            selectedSubs = [];
+                        }
                         $('#sub_products').html(data);
+                        if (selectedSubs.length > 0) {
+                            $('#sub_products').val(selectedSubs).trigger('change');
+                        }
                     });
                 }
             });
 
+            $('#quantity').on('keyup change', updatePrice);
+            $('#size').on('change', updatePrice);
+
+            if (currentStyle) {
+                updateColors(currentStyle, currentColor);
+                updateVendor(currentStyle);
+                updateCost(currentStyle);
+                updateSizes(currentStyle);
+            }
         });
     </script>
 @endsection

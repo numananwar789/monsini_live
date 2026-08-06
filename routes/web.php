@@ -86,6 +86,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders-refresh', [OrderController::class, 'refresh'])->name('orders.refresh');
     Route::get('/orders-clear-all', [OrderController::class, 'clearAll'])->name('orders.clear-all');
 
+    Route::get('/order-allocations/data',[OrderAllocationController::class, 'getOrderAllocationsData'])->name('order-allocations.data');
     Route::resource('order-allocations', OrderAllocationController::class);
 
     // Additional custom routes
