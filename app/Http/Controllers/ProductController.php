@@ -11,10 +11,17 @@ use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
 use App\Imports\ProductsImport;
 use Shuchkin\SimpleXLSXGen;
+use Illuminate\Support\Facades\Cache;
 use DB;
 
 class ProductController extends Controller
 {
+    /**
+     * Cache key for the distinct product-style count used by the products
+     * DataTable's "recordsTotal". Cleared any time products are mutated.
+     */
+    private const TOTAL_STYLES_CACHE_KEY = 'products_datatable_total_styles';
+
     public function index()
     {
         if (auth()->check() && auth()->user()->admin_role === 'customer') {
@@ -24,13 +31,6 @@ class ProductController extends Controller
         // NOTE: product rows are no longer fetched here. The table now loads
         // its rows via AJAX from getProductsData() using server-side
         // DataTables processing, so we don't pull every product on page load.
-
-        // Get all years
-        $years = DB::table('dt_product')
-            ->select('version_year as year')
-            ->groupBy('version_year')
-            ->orderByDesc('version_year')
-            ->get();
 
         // Get all years
         $years = DB::table('dt_product')
@@ -86,6 +86,16 @@ class ProductController extends Controller
             9 => 'product_vendor_name',
         ];
 
+        // Distinct-style count for "recordsTotal" is cached briefly: it's the
+        // same number regardless of paging/sorting, so re-running the full
+        // grouped aggregate below just to count it (previously happening on
+        // every single page/sort/search request) was pure waste. A plain
+        // COUNT(DISTINCT product_style) can also use the index on that
+        // column instead of materializing every grouped column.
+        $recordsTotal = Cache::remember(self::TOTAL_STYLES_CACHE_KEY, 60, function () {
+            return Product::distinct()->count('product_style');
+        });
+
         $grouped = Product::selectRaw('
                 MAX(product_ID) as product_ID,
                 MAX(product_image) as product_image,
@@ -102,8 +112,6 @@ class ProductController extends Controller
             ')
             ->groupBy('product_style');
 
-        $recordsTotal = DB::query()->fromSub($grouped, 'grouped_products')->count();
-
         $query = DB::query()->fromSub($grouped, 'grouped_products');
 
         if ($searchValue !== '') {
@@ -116,7 +124,9 @@ class ProductController extends Controller
             });
         }
 
-        $recordsFiltered = (clone $query)->count();
+        // Only pay for a second full count when a search is actually
+        // narrowing the result set — otherwise filtered == total.
+        $recordsFiltered = $searchValue !== '' ? (clone $query)->count() : $recordsTotal;
 
         if ($orderColumnIndex !== null && isset($sortableColumns[$orderColumnIndex])) {
             $query->orderBy($sortableColumns[$orderColumnIndex], $orderDir);
@@ -222,6 +232,9 @@ class ProductController extends Controller
             switch ($action) {
                 case 'Delete':
                     $deleted = Product::where('product_style', $styleNumber)->delete();
+                    if ($deleted) {
+                        Cache::forget(self::TOTAL_STYLES_CACHE_KEY);
+                    }
                     $message = $deleted
                         ? "Product \"{$styleNumber}\" deleted successfully."
                         : "Product \"{$styleNumber}\" was not found or could not be deleted.";
@@ -249,6 +262,7 @@ class ProductController extends Controller
             switch ($action) {
                 case 'Delete':
                     Product::where('product_style', $styleNumber)->delete();
+                    Cache::forget(self::TOTAL_STYLES_CACHE_KEY);
                     break;
                 case 'Active':
                     Product::where('product_ID', $id)
@@ -267,6 +281,7 @@ class ProductController extends Controller
     {
         try {
             Excel::import(new ProductsImport(), $request->file('file'));
+            Cache::forget(self::TOTAL_STYLES_CACHE_KEY);
 
             return back()->with('success', 'Products imported successfully.');
         } catch (ImportValidationException $e) {
@@ -328,6 +343,8 @@ class ProductController extends Controller
             'product_status' => 1
         ]);
 
+        Cache::forget(self::TOTAL_STYLES_CACHE_KEY);
+
         return redirect()->route('products.index')
             ->with('success', 'Product added successfully!');
     }
@@ -335,40 +352,93 @@ class ProductController extends Controller
     public function archive(Request $request)
     {
         $validated = $request->validate([
-            'selectedItems' => 'required|array',
-            'selectedItems.*' => 'exists:dt_product,product_style',
-            'archiveName' => 'required|string|max:255'
+            'archiveName' => 'required|string|max:255',
+            'selectedItems' => 'sometimes|array',
+            'selectedItems.*' => 'string',
+            'excluded' => 'sometimes|array',
+            'excluded.*' => 'string',
+            'search' => 'sometimes|nullable|string',
         ]);
 
-        DB::transaction(function () use ($validated) {
+        if ($request->boolean('selectAll')) {
+            // "Check all the entries" sends the active filter instead of the
+            // style list. The browser never holds all 10k styles (and PHP's
+            // max_input_vars would quietly truncate them if it did), so the
+            // server re-runs the same search the DataTable used and archives
+            // everything it matches, minus anything the user unticked.
+            $stylesQuery = Product::query();
 
-            $products = Product::whereIn('product_style', $validated['selectedItems'])->get();
-
-            foreach ($products as $product) {
-
-                ProductArchive::create([
-                    'product_ID' => $product->product_ID,
-                    'product_style' => $product->product_style,
-                    'factory_style' => $product->factory_style,
-                    'product_color' => $product->product_color,
-                    'product_size_range' => $product->product_size_range,
-                    'product_cost' => $product->product_cost,
-                    'product_wholesale_price' => $product->product_wholesale_price,
-                    'product_vendor_ID' => $product->product_vendor_ID,
-                    'product_vendor_name' => $product->product_vendor_name,
-                    'product_link' => $product->product_link,
-                    'product_image' => $product->product_image,
-                    'sub_products' => $product->sub_products,
-                    'version_year' => $product->version_year,
-                    'product_status' => 1,
-                    'archive_name' => $validated['archiveName']
-                ]);
+            $search = trim((string) ($validated['search'] ?? ''));
+            if ($search !== '') {
+                $stylesQuery->where(function ($q) use ($search) {
+                    $q->where('product_style', 'like', "%{$search}%")
+                        ->orWhere('factory_style', 'like', "%{$search}%")
+                        ->orWhere('product_color', 'like', "%{$search}%")
+                        ->orWhere('product_vendor_name', 'like', "%{$search}%")
+                        ->orWhere('product_size_range', 'like', "%{$search}%");
+                });
             }
 
-            Product::whereIn('product_style', $validated['selectedItems'])->delete();
+            if (!empty($validated['excluded'])) {
+                $stylesQuery->whereNotIn('product_style', $validated['excluded']);
+            }
+
+            $styles = $stylesQuery->distinct()->pluck('product_style')->all();
+        } else {
+            $styles = array_values(array_unique($validated['selectedItems'] ?? []));
+        }
+
+        if (empty($styles)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No products selected to archive.',
+            ], 422);
+        }
+
+        $archived = 0;
+
+        DB::transaction(function () use ($styles, $validated, &$archived) {
+            // Chunk the styles so a large archive never hydrates every
+            // matching row at once, and insert in bulk rather than running
+            // one INSERT per product row like the old loop did.
+            foreach (array_chunk($styles, 500) as $styleChunk) {
+                Product::whereIn('product_style', $styleChunk)
+                    ->chunkById(500, function ($products) use ($validated, &$archived) {
+                        $rows = [];
+
+                        foreach ($products as $product) {
+                            $rows[] = [
+                                'product_ID' => $product->product_ID,
+                                'product_style' => $product->product_style,
+                                'factory_style' => $product->factory_style,
+                                'product_color' => $product->product_color,
+                                'product_size_range' => $product->product_size_range,
+                                'product_cost' => $product->product_cost,
+                                'product_wholesale_price' => $product->product_wholesale_price,
+                                'product_vendor_ID' => $product->product_vendor_ID,
+                                'product_vendor_name' => $product->product_vendor_name,
+                                'product_link' => $product->product_link,
+                                'product_image' => $product->product_image,
+                                'sub_products' => json_encode($product->sub_products ?? []),
+                                'version_year' => $product->version_year,
+                                'product_status' => 1,
+                                'archive_name' => $validated['archiveName'],
+                            ];
+                        }
+
+                        if (!empty($rows)) {
+                            ProductArchive::insert($rows);
+                            $archived += count($rows);
+                        }
+                    }, 'product_ID');
+
+                Product::whereIn('product_style', $styleChunk)->delete();
+            }
         });
 
-        return response()->json(['success' => true]);
+        Cache::forget(self::TOTAL_STYLES_CACHE_KEY);
+
+        return response()->json(['success' => true, 'archived' => $archived]);
     }
 
     public function edit($id)
@@ -437,7 +507,12 @@ class ProductController extends Controller
 
     public function download()
     {
-        $products = Product::all();
+        // At current catalog size (~25k rows) building the workbook in
+        // SimpleXLSXGen was blowing past PHP's default 128M memory_limit
+        // and fataling out mid-download. Raise it just for this export
+        // instead of relying on server-wide php.ini (often locked down
+        // on shared hosting anyway).
+        ini_set('memory_limit', '512M');
 
         $headers = [
             "Product ID",
@@ -456,22 +531,32 @@ class ProductController extends Controller
 
         $data = [$headers];
 
-        foreach ($products as $product) {
-            $data[] = [
-                $product->product_ID,
-                strtoupper($product->product_style),
-                $product->factory_style,
-                strtoupper($product->product_color),
-                $product->product_size_range,
-                $product->product_cost,
-                $product->product_wholesale_price,
-                implode(', ', $product->sub_products ?? []),
-                $product->product_vendor_ID,
-                $product->product_vendor_name,
-                $product->product_link,
-                $product->product_image
-            ];
-        }
+        // Chunk + select only the columns we export, instead of Product::all(),
+        // so we're not holding a full Eloquent hydration of every column for
+        // every row in memory at once on top of the $data array.
+        Product::select([
+            'product_ID', 'product_style', 'factory_style', 'product_color',
+            'product_size_range', 'product_cost', 'product_wholesale_price',
+            'sub_products', 'product_vendor_ID', 'product_vendor_name',
+            'product_link', 'product_image',
+        ])->orderBy('product_ID')->chunk(1000, function ($products) use (&$data) {
+            foreach ($products as $product) {
+                $data[] = [
+                    $product->product_ID,
+                    strtoupper($product->product_style),
+                    $product->factory_style,
+                    strtoupper($product->product_color),
+                    $product->product_size_range,
+                    $product->product_cost,
+                    $product->product_wholesale_price,
+                    implode(', ', $product->sub_products ?? []),
+                    $product->product_vendor_ID,
+                    $product->product_vendor_name,
+                    $product->product_link,
+                    $product->product_image
+                ];
+            }
+        });
 
         $filename = 'products_bkp_' . now()->format('Y-m-d_H-i-s') . '.xlsx';
 
