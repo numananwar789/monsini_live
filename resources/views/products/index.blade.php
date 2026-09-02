@@ -72,6 +72,7 @@
                                                     <label for="check-all" class="mb-0" style="font-size:18px"><b>Check
                                                             all the entries</b></label>
                                                     <input type="checkbox" name="check-all" id="check-all" class="ml-2">
+                                                    <span id="selection-count" class="ml-3 text-muted"></span>
                                                 </div>
 
                                                 <table id="example" class="table table-striped table-bordered"
@@ -112,9 +113,8 @@
                                             <a href="{{ route('admin-products.download') }}"
                                                 class="btn btn-success float-right">Download Product Data</a>
 
-                                            <button type="button" onclick="xpandTablePrint()"
-                                                class="btn btn-warning float-right" data-toggle="modal"
-                                                data-target="#archiveModal">Archive Data</button>
+                                            <button type="button" class="btn btn-warning float-right"
+                                                data-toggle="modal" data-target="#archiveModal">Archive Data</button>
 
                                             <a href="{{ route('sub-products.index') }}"
                                                 class="btn btn-success float-right">Sub Products</a>
@@ -279,8 +279,12 @@
 
     <!-- dashboard-custom js -->
     <script src="/assets/js/pages/dashboard-custom.js"></script>
-    <script src="/assets/plugins/datatable/js/jquery.dataTables.min.js"></script>
-    <script src="/assets/plugins/datatable/js/dataTables.bootstrap5.min.js"></script>
+    {{-- The local 2.1MB DataTables bundle used to be loaded here, but the CDN
+         copy below overwrites $.fn.dataTable wholesale — so its extensions and
+         its Bootstrap-5 integration were being thrown away, its stylesheet was
+         never even referenced, and its stale scroll handlers threw on every
+         scroll. It was 2.1MB downloaded and parsed on each page load for
+         nothing, so it's gone; the CDN build below is the one actually in use. --}}
     <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.4/js/select2.min.js"></script>
 
     <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
@@ -289,110 +293,139 @@
     <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.print.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
 
+    {{-- Scroller (virtual scrolling) — must load AFTER the DataTables core
+         above, which overwrites the bundled copy in
+         /assets/plugins/datatable/js/ along with all of its extensions. --}}
+    <link rel="stylesheet" href="/assets/plugins/datatable/css/scroller.dataTables.min.css">
+    <script src="/assets/plugins/datatable/js/dataTables.scroller.min.js"></script>
+
     <!-- toastr -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/js/toastr.min.js"></script>
 
     <script>
-        function xpandTable() {
-            table.page.len(-1).draw();
+        // Which products are selected has to be tracked in JS, not read off
+        // the DOM: with server-side processing (and now virtual scrolling)
+        // only a few dozen rows exist at any moment, so ":checked" can never
+        // see the full selection.
+        //
+        // selectAllMatching = "every record matching the current search".
+        // In that mode we track the holes (excludedStyles) instead of the
+        // 10,000 individual picks, and the server resolves the real list.
+        var selectedStyles = new Set();
+        var excludedStyles = new Set();
+        var selectAllMatching = false;
+
+        function updateSelectionCount() {
+            var count;
+
+            if (selectAllMatching) {
+                var info = table ? table.page.info() : null;
+                count = (info ? info.recordsDisplay : 0) - excludedStyles.size;
+            } else {
+                count = selectedStyles.size;
+            }
+
+            $('#selection-count').text(count > 0 ? count.toLocaleString() + ' selected' : '');
         }
 
-        function xpandTablePrint() {
-            var elementsNew = document.getElementsByClassName("myClass");
-            Array.from(elementsNew).forEach(function(elementInput) {
-                elementInput.value = '';
-            });
-            $('.myClass').trigger('keyup');
-            table.page.len(-1).draw();
-        }
-
+        // This used to call table.page.len(-1).draw() before submitting — a
+        // leftover from the client-side era, when every row had to be in the
+        // DOM for ":checked" to find it. Under server-side processing that
+        // just yanks all 10,000 styles into the browser (precisely what
+        // crashes the tab) and still wouldn't have found anything, since
+        // rows on other pages were never checked in the DOM to begin with.
         function xpandTablePrintNew() {
-            var elementsNew = document.getElementsByClassName("myClass");
-            Array.from(elementsNew).forEach(function(elementInput) {
-                elementInput.value = '';
-            });
-            $('.myClass').trigger('keyup');
-            table.page.len(-1).draw();
+            var archiveName = $.trim($('#archive-name').val() || '');
 
-            var selectedItems = [];
-            $('input[name="products[]"]:checked').each(function() {
-                selectedItems.push($(this).val());
-            });
+            if (!archiveName) {
+                alert('Please enter an archive name.');
+                return;
+            }
 
-            var archiveName = $('#archive-name').val();
-            var token = $('meta[name="csrf-token"]').attr('content');
+            var payload = {
+                archiveName: archiveName
+            };
+
+            if (selectAllMatching) {
+                // Send the filter, not the list. Shipping 10k style numbers
+                // would be silently truncated by PHP's max_input_vars limit
+                // anyway, so the server re-runs the search and archives the
+                // matching set minus whatever was unticked.
+                payload.selectAll = 1;
+                payload.search = table.search() || '';
+                payload.excluded = Array.from(excludedStyles);
+            } else {
+                payload.selectedItems = Array.from(selectedStyles);
+
+                if (!payload.selectedItems.length) {
+                    alert('Please select at least one product to archive.');
+                    return;
+                }
+            }
+
+            var $save = $('#profileclick').prop('disabled', true).text('Archiving…');
 
             $.ajax({
                 url: '/products/archive',
                 type: 'POST',
                 headers: {
-                    'X-CSRF-TOKEN': token
+                    'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
                 },
-                data: {
-                    selectedItems: selectedItems,
-                    archiveName: archiveName
-                },
+                data: payload,
                 success: function(response) {
-                    alert("Archived Successfully!")
+                    alert('Archived ' + (response.archived || 0) + ' products successfully!');
                     window.location.reload();
                 },
                 error: function(xhr, status, error) {
+                    $save.prop('disabled', false).text('Save');
                     alert(xhr.responseText);
                 }
             });
         }
 
-        // Re-attach select2 activate/deactivate handlers. Delegated on
-        // document so it works for rows injected by DataTables' ajax draw.
-        function bindSelect2Handlers() {
-            $('.js-select2').on('select2:select', function(e) {
-                var prodID = e.params.data.id;
-                var colorProd = e.params.data.text;
-
-                $.ajax({
-                    url: "{{ route('admin-products.action') }}",
-                    method: 'POST',
-                    data: {
-                        _token: "{{ csrf_token() }}",
-                        id: prodID,
-                        action: "Active"
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            toastr.success('Color ' + colorProd + ' has been activated',
-                                'Activated', {
-                                    progressBar: true,
-                                    closeHtml: '<button type="button">&times;</button>',
-                                    newestOnTop: true,
-                                });
-                        }
-                    }
-                });
+        // Bound once on document — genuine delegation, so rows that DataTables
+        // renders later are covered automatically. The old version re-ran a
+        // direct .on() against every .js-select2 on each draw, which stacked
+        // duplicate handlers (and fired one AJAX call per stacked copy) once
+        // rows started being re-rendered as often as scrolling does now.
+        $(document)
+            .on('select2:select', '.js-select2', function(e) {
+                setColorStatus(e.params.data.id, e.params.data.text, 'Active');
+            })
+            .on('select2:unselect', '.js-select2', function(e) {
+                setColorStatus(e.params.data.id, e.params.data.text, 'Inactive');
             });
 
-            $('.js-select2').on('select2:unselect', function(e) {
-                var prodID = e.params.data.id;
-                var colorProd = e.params.data.text;
-
-                $.ajax({
-                    url: "{{ route('admin-products.action') }}",
-                    method: 'POST',
-                    data: {
-                        _token: "{{ csrf_token() }}",
-                        id: prodID,
-                        action: "Inactive"
-                    },
-                    success: function(response) {
-                        if (response.success) {
-                            toastr.error('Color ' + colorProd + ' has been de-activated',
-                                'Deactivated', {
-                                    progressBar: true,
-                                    closeHtml: '<button type="button">&times;</button>',
-                                    newestOnTop: true,
-                                });
-                        }
+        function setColorStatus(prodID, colorProd, action) {
+            $.ajax({
+                url: "{{ route('admin-products.action') }}",
+                method: 'POST',
+                data: {
+                    _token: "{{ csrf_token() }}",
+                    id: prodID,
+                    action: action
+                },
+                success: function(response) {
+                    if (!response.success) {
+                        return;
                     }
-                });
+
+                    if (action === 'Active') {
+                        toastr.success('Color ' + colorProd + ' has been activated',
+                            'Activated', {
+                                progressBar: true,
+                                closeHtml: '<button type="button">&times;</button>',
+                                newestOnTop: true,
+                            });
+                    } else {
+                        toastr.error('Color ' + colorProd + ' has been de-activated',
+                            'Deactivated', {
+                                progressBar: true,
+                                closeHtml: '<button type="button">&times;</button>',
+                                newestOnTop: true,
+                            });
+                    }
+                }
             });
         }
 
@@ -459,24 +492,109 @@
                 });
             }
 
-            // Initialize DataTable with server-side processing.
-            // Rows, paging, search, and sorting are now all handled
-            // by the getProductsData() endpoint instead of being
-            // rendered up-front for every product on page load.
-            table = $('#example').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: {
-                    url: "{{ route('admin-products.datatable') }}",
-                    type: 'GET'
-                },
-                columns: columns,
-                aLengthMenu: [
-                    [10, 25, 50, 100, 200, -1],
-                    [10, 25, 50, 100, 200, "All"]
-                ],
-                dom: 'lBfrtip',
-                buttons: [{
+            // The table runs in one of two modes:
+            //
+            //   paged    — the original behaviour, unchanged: pick 10/25/50/
+            //              100/200 from the dropdown and page through.
+            //   scroller — used only when "All" is picked. DataTables'
+            //              Scroller keeps just the rows near the viewport in
+            //              the DOM (a couple of dozen instead of 10,000) while
+            //              the scrollbar still spans the whole catalogue.
+            //
+            // "All" used to render every row at once, which meant 10,000 rows
+            // AND 10,000 select2 colour widgets — that's what killed the tab.
+            // In scroller mode you still reach every record, just by scrolling
+            // instead of by rendering them all up front.
+            var scrollerMode = false;
+
+            // Tracked across rebuilds: search.dt also fires when the table is
+            // re-created, and without comparing the actual term that would
+            // silently wipe the user's selection every time they switch modes.
+            var lastSearchTerm = '';
+
+            function tableConfig(useScroller, pageLength) {
+                var config = {
+                    processing: true,
+                    serverSide: true,
+                    ajax: {
+                        url: "{{ route('admin-products.datatable') }}",
+                        type: 'GET'
+                    },
+                    columns: columns,
+                    aLengthMenu: [
+                        [10, 25, 50, 100, 200, -1],
+                        [10, 25, 50, 100, 200, "All"]
+                    ],
+                    buttons: buttons,
+                    drawCallback: onDraw
+                };
+
+                if (useScroller) {
+                    config.deferRender = true;
+                    config.scrollY = '60vh';
+                    config.scrollX = true;
+                    config.scrollCollapse = true;
+                    config.scroller = {
+                        loadingIndicator: true,
+                        // Rendered rows ≈ displayBuffer × page length. These
+                        // rows are heavy (image + select2 + action form), so
+                        // keep the rendered window deliberately small.
+                        displayBuffer: 2
+                    };
+                    // No pager: scrolling is the navigation in this mode.
+                    config.dom = 'lBfrti';
+                } else {
+                    config.dom = 'lBfrtip';
+                    // Keep whatever size the user picked when coming back out
+                    // of "All", rather than snapping them to the default.
+                    config.pageLength = pageLength || 10;
+                }
+
+                return config;
+            }
+
+            function initTable(useScroller, pageLength) {
+                if ($.fn.dataTable.isDataTable('#example')) {
+                    // Tear the old instance down cleanly — select2 widgets
+                    // have to be destroyed explicitly or they leak their
+                    // detached DOM behind the table.
+                    $('#example').find('.js-select2').each(function() {
+                        if ($(this).data('select2')) {
+                            $(this).select2('destroy');
+                        }
+                    });
+
+                    $('#example').DataTable().destroy();
+                    $('#example').find('tbody').empty();
+                }
+
+                scrollerMode = useScroller;
+                table = $('#example').DataTable(tableConfig(useScroller, pageLength));
+
+                // search.dt lives on the instance, so it needs rebinding
+                // whenever the table is rebuilt.
+                table.on('search.dt', function() {
+                    var term = table.search();
+
+                    if (term === lastSearchTerm) {
+                        return;
+                    }
+
+                    lastSearchTerm = term;
+
+                    // A different filter means a different "everything", so
+                    // drop the select-all flag. Explicit picks stay valid.
+                    if (selectAllMatching) {
+                        selectAllMatching = false;
+                        excludedStyles.clear();
+                        $('#check-all').prop('checked', false);
+                    }
+
+                    updateSelectionCount();
+                });
+            }
+
+            var buttons = [{
                     extend: 'print',
                     autoPrint: true,
                     text: 'Print',
@@ -508,26 +626,88 @@
 
                         head.appendChild(style);
                     }
-                }],
-                drawCallback: function() {
-                    $(".js-select2").select2({
-                        closeOnSelect: false,
-                        placeholder: "Colors",
-                        allowHtml: true,
-                        allowClear: true,
-                        tags: false
-                    });
-                    bindSelect2Handlers();
+                }];
+
+            function onDraw() {
+                // Only initialise selects that aren't already select2 widgets:
+                // in scroller mode this runs on every scroll chunk, and
+                // re-initialising a live widget duplicates its DOM.
+                $('#example').find('.js-select2:not(.select2-hidden-accessible)').select2({
+                    closeOnSelect: false,
+                    placeholder: "Colors",
+                    allowHtml: true,
+                    allowClear: true,
+                    tags: false
+                });
+
+                // Rows are re-rendered from scratch on every draw, so the
+                // ticked state has to be restored from the tracked selection
+                // rather than surviving in the DOM.
+                $('#example').find('input[name="products[]"]').each(function() {
+                    this.checked = selectAllMatching ?
+                        !excludedStyles.has(this.value) :
+                        selectedStyles.has(this.value);
+                });
+
+                // Scroller manages the page length itself (it sizes chunks to
+                // the viewport), which leaves the dropdown showing whatever
+                // number it landed on. Keep it reading "All", since that's the
+                // mode the user actually chose.
+                if (scrollerMode) {
+                    $('#example_length select').val('-1');
+                }
+            }
+
+            initTable(false);
+
+            // Switching to "All" rebuilds the table in scroller mode, and
+            // picking any real page size rebuilds it as a normal paged table.
+            // This is bound to the <select> rather than DataTables' length.dt
+            // event because Scroller fires that event itself when it resizes
+            // its chunks, which would look like a user choice and bounce the
+            // table straight back out of scroller mode.
+            $(document).on('change', '#example_length select', function() {
+                var length = parseInt(this.value, 10);
+                var wantScroller = length === -1;
+
+                if (wantScroller !== scrollerMode) {
+                    // Defer so DataTables finishes handling this change first.
+                    setTimeout(function() {
+                        initTable(wantScroller, wantScroller ? null : length);
+                    }, 0);
                 }
             });
 
-            // Check all functionality — only affects checkboxes currently
-            // rendered on the page (the DataTables-standard behaviour).
-            $('#check-all').click(function(event) {
-                var checked = this.checked;
-                $('input[name="products[]"]').each(function() {
-                    this.checked = checked;
+            // "Check all the entries" means every record matching the current
+            // search — not just the rows that happen to be rendered. The real
+            // list is resolved server-side when archiving.
+            $('#check-all').on('change', function() {
+                selectAllMatching = this.checked;
+                selectedStyles.clear();
+                excludedStyles.clear();
+
+                $('#example').find('input[name="products[]"]').each(function() {
+                    this.checked = selectAllMatching;
                 });
+
+                updateSelectionCount();
+            });
+
+            $('#example').on('change', 'input[name="products[]"]', function() {
+                if (selectAllMatching) {
+                    // Stay in "all matching" mode, just remember the holes.
+                    if (this.checked) {
+                        excludedStyles.delete(this.value);
+                    } else {
+                        excludedStyles.add(this.value);
+                    }
+                } else if (this.checked) {
+                    selectedStyles.add(this.value);
+                } else {
+                    selectedStyles.delete(this.value);
+                }
+
+                updateSelectionCount();
             });
 
             $(document).on('change', '.toggle-inventory-override', function() {
