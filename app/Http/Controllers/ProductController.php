@@ -57,7 +57,7 @@ class ProductController extends Controller
 
         $allSubProducts = \App\Models\SubProduct::pluck('sub_product_name')->toArray();
 
-        return view('products.index', compact('allSubProducts','years'));
+        return view('products.index', compact('allSubProducts', 'years'));
     }
 
     /**
@@ -134,9 +134,19 @@ class ProductController extends Controller
             $query->orderBy('product_style', 'asc');
         }
 
-        if ($length != -1) {
-            $query->offset($start)->limit($length);
+        // DataTables sends length=-1 for "All". That must NEVER mean "no LIMIT"
+        // here — with real data volume that pulls every grouped style (plus a
+        // colors query, JSON-decoding, and HTML-building pass per row) into a
+        // single response, which is exactly what crashes the page. Clamp it to
+        // the largest real page size instead; the Scroller frontend mode still
+        // reaches every record, just via repeated bounded requests (increasing
+        // `start`) as the user scrolls, rather than one unbounded one.
+        $maxLength = 200;
+        if ($length <= 0 || $length > $maxLength) {
+            $length = $maxLength;
         }
+
+        $query->offset($start)->limit($length);
 
         $rows = $query->get();
 
@@ -535,10 +545,18 @@ class ProductController extends Controller
         // so we're not holding a full Eloquent hydration of every column for
         // every row in memory at once on top of the $data array.
         Product::select([
-            'product_ID', 'product_style', 'factory_style', 'product_color',
-            'product_size_range', 'product_cost', 'product_wholesale_price',
-            'sub_products', 'product_vendor_ID', 'product_vendor_name',
-            'product_link', 'product_image',
+            'product_ID',
+            'product_style',
+            'factory_style',
+            'product_color',
+            'product_size_range',
+            'product_cost',
+            'product_wholesale_price',
+            'sub_products',
+            'product_vendor_ID',
+            'product_vendor_name',
+            'product_link',
+            'product_image',
         ])->orderBy('product_ID')->chunk(1000, function ($products) use (&$data) {
             foreach ($products as $product) {
                 $data[] = [
