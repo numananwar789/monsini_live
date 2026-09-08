@@ -143,59 +143,118 @@ class OrderAllocationController extends Controller
 
         foreach ($rows as $order) {
 
+            // Determine row class and style exactly as in Blade template
+            $rowClass = 'ss';
             $rowStyle = '';
+            $button = 'Allocate';
 
-            if ($order->bypass == 1) {
-                $rowStyle = 'background-color:#d9534f;color:white;';
-            } elseif ($order->given_by_onway > 0) {
-                $rowStyle = 'background-color:rgb(209,198,0);color:black;';
-            } elseif ($order->given_by_invntry > 0) {
-                $rowStyle = 'background-color:rgb(0,100,12);color:white;';
-            } elseif (strtoupper($order->order_customer_name) == strtoupper($ownerComp)) {
-                $rowStyle = 'background-color:#3f4d67;color:white;';
+            // Check if customer matches owner company (Monsini) - using str_contains as in Blade
+            if (str_contains(strtoupper($order->order_customer_name), strtoupper($ownerComp))) {
+                $rowClass = "bg-monsini";
+                $rowStyle = "background-color: #3f4d67; color:white;";
             }
 
+            // Check if given_by_invntry > 0 (overrides previous)
+            if ($order->given_by_invntry > 0) {
+                $rowClass = "bg-inventory";
+                $rowStyle = "background-color: rgb(0 100 12); color:white;";
+                $button = 'Allocate';
+            }
+
+            // Check if given_by_onway > 0 (overrides previous)
+            if ($order->given_by_onway > 0) {
+                $rowClass = "bg-onway";
+                $rowStyle = "background-color: rgb(209 198 0); color:white;";
+                $button = 'Allocate';
+            }
+
+            // Check if bypass == 1 (overrides all previous)
+            if ($order->bypass == 1) {
+                $rowClass = "bg-bypass";
+                $rowStyle = "background-color: rgb(255, 157, 92); color:white;";
+                $button = 'Allocate';
+            }
+
+            // Handle sub_products exactly as in Blade
             $subProducts = '';
-
             if (!empty($order->sub_products)) {
-
                 $decoded = is_array($order->sub_products)
                     ? $order->sub_products
                     : json_decode($order->sub_products, true);
-
                 if (is_array($decoded)) {
                     $subProducts = implode(', ', $decoded);
                 }
-
             }
 
+            // Allocate button exactly as in Blade
             $allocateButton =
                 '<input type="button"
-                    class="btn btn-info btn-sm"
-                    value="Allocate"
-                    name="' . $order->order_ID . '"
-                    onclick="fillModal(this)"
-                    data-toggle="modal"
-                    data-target="#order_model">';
+                class="btn btn-info mb-0 btn-sm"
+                data-toggle="modal"
+                data-target="#order_model"
+                name="' . $order->order_ID . '"
+                value="Allocate"
+                onclick="fillModal(this)">';
 
-            $actions =
-                '<a class="btn btn-success btn-sm"
+            // Build Actions HTML exactly as in Blade
+            $actions = '';
+
+            // Edit button - exactly as in Blade
+            $actions .=
+                '<a target="_self" class="btn btn-success mb-0 btn-sm"
                 href="' . route('order-allocations.edit', $order->order_ID) . '">
                 Edit
             </a>';
 
-            $data[] = [
+            // Delete buttons - exactly as in Blade (only for superadmin or admin1)
+            if (auth()->user()->admin_role == "superadmin" || auth()->user()->user_name == "admin1") {
+                if ($order->given_by_invntry > 0 || $order->given_by_onway > 0) {
+                    $actions .=
+                        '<a target="_self" class="btn btn-danger mb-0 btn-sm"
+                        href="' . route('order-allocation.delete', $order->order_ID) . '"
+                        onclick="return confirm(\'Are you sure you want to delete this order?\')">
+                        Delete
+                    </a>';
+                } else {
+                    $actions .=
+                        '<a target="_self" class="btn btn-danger mb-0 btn-sm"
+                        href="' . route('order-allocation.delete-full', $order->order_ID) . '"
+                        onclick="return confirm(\'Are you sure you want to delete this order and its related records?\')">
+                        Delete
+                    </a>';
+                }
+            }
 
+            // Send to Staging / Incoming button - exactly as in Blade
+            $stagingClass = $order->staging_flag == 'Yes' ? 'btn btn-warning mb-0 btn-sm' : 'btn btn-success mb-0 btn-sm';
+            $stagingText = $order->staging_flag == 'Yes' ? 'Incoming' : 'Send to Staging';
+            $actions .=
+                '<a target="_self" class="' . $stagingClass . '"
+                href="' . route('order-allocation.toggle-staging', $order->order_ID) . '">
+                ' . $stagingText . '
+            </a>';
+
+            // Hidden input for order ID - exactly as in Blade
+            $actions .=
+                '<input type="text" style="display:none" name="orderID" value="' . $order->order_ID . '">';
+
+            $data[] = [
+                // Checkbox - exactly as in Blade
                 'checkbox' =>
-                    '<input class="form-check-input"
+                    '<td style="text-align: center;vertical-align: middle;">
+                    <input form="orderForm" class="form-check-input"
                         type="checkbox"
                         value="' . $order->order_ID . '"
-                        name="orders[]">',
+                        id="' . $order->order_ID . '"
+                        name="orders[]">
+                    <label class="form-check-label" for="' . $order->order_ID . '"></label>
+                </td>',
 
+                // All other fields exactly as in Blade with proper formatting
                 'order_id' => $order->order_ID,
                 'order_guid' => $order->order_GUID,
                 'vendor' => strtoupper($order->order_vendor_name),
-                'vendor_purchase_id' => $order->vendor_purchase_ID,
+                'vendor_purchase_id' => strtoupper($order->vendor_purchase_ID),
                 'customer' => strtoupper($order->order_customer_name),
                 'style' => strtoupper($order->order_product_style),
                 'color' => strtoupper($order->order_product_color),
@@ -206,10 +265,8 @@ class OrderAllocationController extends Controller
                 'onway' => $order->given_by_onway,
                 'cost' => $order->order_cost,
                 'price' => $order->order_purchase_price,
-                'date' => optional($order->created_at)->format('Y-m-d'),
-                'status' => $order->order_status == 'Pending'
-                    ? 'Confirmed'
-                    : $order->order_status,
+                'date' => \Carbon\Carbon::parse($order->created_at)->format('Y-m-d'),
+                'status' => $order->order_status == "Pending" ? "Confirmed" : $order->order_status,
                 'purchase_id' => $order->purchase_id,
                 'wear_date' => $order->order_wear_date,
                 'user' => $order->user_flag,
@@ -217,7 +274,7 @@ class OrderAllocationController extends Controller
                 'actions' => $actions,
                 'allocate' => $allocateButton,
                 'row_style' => $rowStyle,
-
+                'row_class' => $rowClass,
             ];
 
         }
@@ -435,7 +492,12 @@ class OrderAllocationController extends Controller
         }
 
         $newStatus = $order->staging_flag === 'Yes' ? 'No' : 'Yes';
-        $newDate = $newStatus === 'Yes' ? now()->toDateString() : 'NA';
+
+        // Only set staging date if it's being set to 'Yes' and no date exists
+        $newDate = $order->staging_date;
+        if ($newStatus === 'Yes' && (empty($order->staging_date) || $order->staging_date === 'NA')) {
+            $newDate = now()->toDateString();
+        }
 
         DB::table('dt_order_allocation')
             ->where('order_ID', $id)
