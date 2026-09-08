@@ -160,6 +160,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/admin/orders/get-sizes/{style}', [OrderController::class, 'getSizes'])->name('orders.get-sizes');
     Route::get('/admin/orders/get-cost/{style}', [OrderController::class, 'getCost'])->name('orders.get-cost');
 
+    Route::post('/get-products-paginated', [OrderController::class, 'getProducts'])->name('get.products.paginated');
+    Route::post('/get-vendor-by-style', [OrderController::class, 'getVendorByStyle'])->name('get.vendor.by.style');
+
     Route::post('/get-color', [OrderController::class, 'getColor'])->name('get.color');
     Route::post('/get-cost', [OrderController::class, 'getCost2'])->name('get.cost');
     Route::post('/get-size', [OrderController::class, 'getSize'])->name('get.size');

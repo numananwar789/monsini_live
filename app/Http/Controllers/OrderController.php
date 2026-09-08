@@ -64,12 +64,17 @@ class OrderController extends Controller
         $draw = (int) $request->input('draw', 1);
         $start = (int) $request->input('start', 0);
         $length = (int) $request->input('length', 25);
+
+        // Limit to 200 when "All" is selected or length is -1
+        if ($length == -1 || $length > 200) {
+            $length = 200;
+        }
+
         $searchValue = trim((string) $request->input('search.value', ''));
         $orderColumnIndex = $request->input('order.0.column');
         $orderDir = strtolower($request->input('order.0.dir', 'asc')) === 'desc' ? 'desc' : 'asc';
 
-        // Column index -> DB column, matching the <thead> order in the Blade view.
-        // 0 (checkbox), 9 (sub_products), 19 (actions) are intentionally omitted (not sortable).
+        // Column index -> DB column
         $sortableColumns = [
             1 => 'order_ID',
             2 => 'order_GUID',
@@ -118,9 +123,8 @@ class OrderController extends Controller
             $query->orderBy('order_ID', 'desc');
         }
 
-        if ($length != -1) {
-            $query->offset($start)->limit($length);
-        }
+        // Apply limit and offset
+        $query->offset($start)->limit($length);
 
         $rows = $query->get();
 
@@ -129,9 +133,6 @@ class OrderController extends Controller
 
         $data = [];
         foreach ($rows as $order) {
-
-            // Same row-coloring rules as the old Blade @php block, moved here
-            // since server-side rows are now built as JSON, not <tr> markup.
             $rowStyle = '';
             if (strtoupper((string) $order->order_customer_name) === strtoupper((string) $ownerComp)) {
                 $rowStyle = 'background-color: #3f4d67; color:white;';
@@ -183,7 +184,6 @@ class OrderController extends Controller
                 'status' => e($order->order_status),
                 'user' => e($order->user_flag),
                 'actions' => $actions,
-                // extra keys, not bound to a <th> column, read via createdRow in JS
                 'row_style' => $rowStyle,
             ];
         }
@@ -729,41 +729,43 @@ class OrderController extends Controller
         $order = Order::findOrFail($id);
 
         // Get related data
-        // $ownerCompany = Customer::where('cust_owner', 'Yes')->first()->cust_comp_name;
-
         $colors = Product::where('product_status', 1)
             ->where('product_style', $order->order_product_style)
             ->distinct('product_color')
             ->pluck('product_color');
 
-        $sizeRange = Product::where('product_style', $order->order_product_style)
-            ->first()->product_size_range;
+        // Get size range with safety check
+        $product = Product::where('product_style', $order->order_product_style)->first();
+        $sizeRange = $product ? $product->product_size_range : '';
 
-        $costProduct = Product::where('product_style', $order->order_product_style)
-            ->first()->product_wholesale_price;
+        // If no size range found, set a default to avoid errors
+        if (empty($sizeRange) || strpos($sizeRange, '-') === false) {
+            $sizeRange = '0-0'; // Default fallback
+        }
+
+        $costProduct = $product ? $product->product_wholesale_price : 0;
 
         $vendors = Vendor::select('vendor_ID', 'vendor_comp_name')->get();
         $customers = Customer::orderBy('cust_comp_name', 'asc')->get(['cust_ID', 'cust_comp_name']);
 
-        $products = Product::select('product_style', 'product_vendor_name')->distinct()->get();
-        $productStyles = Product::distinct('product_style')->pluck('product_style');
-
-        $vxp = Product::select('product_style', 'product_vendor_name', 'product_vendor_ID')
+        // Keep your original products query
+        $products = Product::select('product_style', 'product_vendor_name')
+            ->where('product_status', 1)
             ->distinct()
             ->get();
 
+        $productStyles = Product::distinct('product_style')->pluck('product_style');
 
-        $product = Product::where('product_style', $order->order_product_style)->first();
-
-        $sub_products = $product && $product->sub_products ? $product->sub_products : [];
-        $subProducts = is_string($sub_products)
-            ? json_decode($sub_products, true)
-            : $sub_products;
-
+        // Get sub-products
+        $subProducts = [];
+        if ($product && $product->sub_products) {
+            $subProducts = is_string($product->sub_products)
+                ? json_decode($product->sub_products, true)
+                : $product->sub_products;
+        }
 
         return view('admin.orders.edit', compact(
             'order',
-            // 'ownerCompany',
             'colors',
             'sizeRange',
             'costProduct',
@@ -771,9 +773,53 @@ class OrderController extends Controller
             'customers',
             'products',
             'productStyles',
-            'subProducts',
-            'vxp'
+            'subProducts'
         ));
+    }
+
+    public function getProducts(Request $request)
+    {
+        $search = $request->get('q', '');
+        $page = $request->get('page', 1);
+        $perPage = 10; // Items per page
+
+        $query = Product::where('product_status', 1)
+            ->select('product_style', 'product_vendor_name')
+            ->distinct();
+
+        if (!empty($search)) {
+            $query->where('product_style', 'LIKE', '%' . $search . '%');
+        }
+
+        $products = $query->orderBy('product_style')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        return response()->json([
+            'results' => $products->map(function ($product) {
+                return [
+                    'id' => $product->product_style,
+                    'text' => strtoupper($product->product_style),
+                    'vendor' => $product->product_vendor_name ?? ''
+                ];
+            }),
+            'pagination' => [
+                'more' => $products->hasMorePages()
+            ]
+        ]);
+    }
+
+
+    public function getVendorByStyle(Request $request)
+    {
+        $style = $request->get('style');
+
+        $product = Product::where('product_style', $style)
+            ->where('product_status', 1)
+            ->first();
+
+        return response()->json([
+            'vendor_name' => $product ? $product->product_vendor_name : ''
+        ]);
     }
 
     public function update(Request $request, $id)
