@@ -289,7 +289,7 @@ class OrderController extends Controller
                 ->update(['order_status' => 'Placed']);
 
             // Insert into order allocations
-            $this->createOrderAllocations($orders);
+            $this->createOrderAllocations($orders, $ownerCompany);
         }
     }
 
@@ -316,9 +316,50 @@ class OrderController extends Controller
         }
     }
 
-    protected function createOrderAllocations($orders)
+    protected function createOrderAllocations($orders, $ownerCompany = '')
     {
-        $allocationData = $orders->map(function ($order) {
+        if (empty($ownerCompany)) {
+            $ownerCompany = Customer::where('cust_owner', 'Yes')->value('cust_comp_name') ?? '';
+        }
+
+        $allocationData = $orders->map(function ($order) use ($ownerCompany) {
+            $stagingDate = 'NA';
+            $stagingFlag = 'No';
+
+            // First check if the order already preserved staging info from onway allocation
+            if (!empty($order->staging_date) && $order->staging_date !== 'NA') {
+                $stagingDate = $order->staging_date;
+                $stagingFlag = $order->staging_flag ?? 'Yes';
+            } elseif ($order->given_by_onway > 0) {
+                $onwayMatch = OrderAllocation::where('order_product_style', $order->order_product_style)
+                    ->where('order_product_color', $order->order_product_color)
+                    ->where('order_product_size', $order->order_product_size)
+                    ->where('order_customer_name', $ownerCompany)
+                    ->where(function ($query) use ($order) {
+                        if (!empty($order->onway_vndr_prchs_ids) && $order->onway_vndr_prchs_ids !== 'NA') {
+                            $query->where('vendor_purchase_ID', $order->onway_vndr_prchs_ids)
+                                  ->orWhere('staging_flag', 'Yes');
+                        } else {
+                            $query->where('staging_flag', 'Yes');
+                        }
+                    })
+                    ->first();
+
+                // Fallback to any matching Monsini order if not matched above
+                if (!$onwayMatch) {
+                    $onwayMatch = OrderAllocation::where('order_product_style', $order->order_product_style)
+                        ->where('order_product_color', $order->order_product_color)
+                        ->where('order_product_size', $order->order_product_size)
+                        ->where('order_customer_name', $ownerCompany)
+                        ->first();
+                }
+
+                if ($onwayMatch) {
+                    $stagingDate = $onwayMatch->staging_date ?? 'NA';
+                    $stagingFlag = $onwayMatch->staging_flag ?? 'No';
+                }
+            }
+
             return [
                 'final_ID' => 0,
                 'order_ID' => $order->order_ID,
@@ -339,16 +380,21 @@ class OrderController extends Controller
                 'purchase_id' => $order->purchase_id,
                 'created_at' => $order->created_at,
                 'created_at_final' => $order->created_at,
+                'created_at_allocation' => now(),
                 'onway_vndr_prchs_ids' => $order->onway_vndr_prchs_ids,
                 'onway_cstmr_prchs_ids' => $order->onway_cstmr_prchs_ids,
                 'vendor_purchase_ID' => $order->onway_vndr_prchs_ids,
                 'order_wear_date' => $order->order_wear_date,
                 'sub_products' => json_encode($order->sub_products ?? []),
                 'user_flag' => $order->user_flag,
-                'order_GUID' => $order->order_GUID
+                'order_GUID' => $order->order_GUID,
+                'staging_date' => $stagingDate,
+                'staging_flag' => $stagingFlag,
+                'order_status' => 'Pending',
             ];
         })->toArray();
 
+        // Always insert as new separate allocation records; never overwrite existing Monsini orders
         OrderAllocation::insert($allocationData);
     }
 
@@ -1010,13 +1056,21 @@ class OrderController extends Controller
 
                         if ($orderNow->order_quantity > $remainingQuantity) {
 
-                            $order->update(['given_by_onway' => $order->given_by_onway + $remainingQuantity]);
+                            $order->update([
+                                'given_by_onway' => $order->given_by_onway + $remainingQuantity,
+                                'staging_date' => $orderNow->staging_date ?? 'NA',
+                                'staging_flag' => $orderNow->staging_flag ?? 'No',
+                            ]);
                             // Update allocation quantity
                             $orderNow->decrement('order_quantity', $remainingQuantity);
 
                             $remainingQuantity = 0;
                         } elseif ($orderNow->order_quantity < $remainingQuantity) {
-                            $order->update(['given_by_onway' => $order->given_by_onway + $orderNow->order_quantity]);
+                            $order->update([
+                                'given_by_onway' => $order->given_by_onway + $orderNow->order_quantity,
+                                'staging_date' => $orderNow->staging_date ?? 'NA',
+                                'staging_flag' => $orderNow->staging_flag ?? 'No',
+                            ]);
                             // Delete related records
                             Order::where('order_ID', $orderNow->order_ID)->delete();
                             OrderFinal::where('order_ID', $orderNow->order_ID)->delete();
@@ -1024,7 +1078,11 @@ class OrderController extends Controller
 
                             $remainingQuantity -= $orderNow->order_quantity;
                         } else { // $orderNow->order_quantity == $remainingQuantity
-                            $order->update(['given_by_onway' => $order->given_by_onway + $orderNow->order_quantity]);
+                            $order->update([
+                                'given_by_onway' => $order->given_by_onway + $orderNow->order_quantity,
+                                'staging_date' => $orderNow->staging_date ?? 'NA',
+                                'staging_flag' => $orderNow->staging_flag ?? 'No',
+                            ]);
                             // Delete related records
                             Order::where('order_ID', $orderNow->order_ID)->delete();
                             OrderFinal::where('order_ID', $orderNow->order_ID)->delete();
@@ -1323,6 +1381,8 @@ class OrderController extends Controller
                                 $wearDateNow,
                                 $remainingQuantity,
                                 $sub_products,
+                                $orderNow->staging_date ?? 'NA',
+                                $orderNow->staging_flag ?? 'No',
                             );
 
                             // Update allocation quantity
@@ -1347,6 +1407,8 @@ class OrderController extends Controller
                                 $wearDateNow,
                                 $orderNow->order_quantity,
                                 $sub_products,
+                                $orderNow->staging_date ?? 'NA',
+                                $orderNow->staging_flag ?? 'No',
                             );
 
                             // Delete related records
@@ -1374,6 +1436,8 @@ class OrderController extends Controller
                                 $wearDateNow,
                                 $remainingQuantity,
                                 $sub_products,
+                                $orderNow->staging_date ?? 'NA',
+                                $orderNow->staging_flag ?? 'No',
                             );
 
                             // Delete related records
@@ -1494,6 +1558,8 @@ class OrderController extends Controller
         $wearDateNow,
         $givenByOnway,
         $sub_products,
+        $stagingDate = 'NA',
+        $stagingFlag = 'No',
     ) {
         // $orderCost = $prodSize < 18
         //     ? $quantity * $prodInfo->product_wholesale_price
@@ -1528,6 +1594,8 @@ class OrderController extends Controller
             'user_flag' => 'admin',
             'sub_products' => $sub_products,
             'order_GUID' => $this->generateOrderGuid(),
+            'staging_flag' => $stagingFlag ?? 'No',
+            'staging_date' => $stagingDate ?? 'NA',
             'created_at' => now(),
         ]);
     }

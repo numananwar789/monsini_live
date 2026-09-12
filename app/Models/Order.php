@@ -37,7 +37,9 @@ class Order extends Model
         'order_wear_date',
         'user_flag',
         'sub_products',
-        'order_GUID'
+        'order_GUID',
+        'staging_flag',
+        'staging_date'
     ];
 
     public function customer()
