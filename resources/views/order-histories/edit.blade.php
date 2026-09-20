@@ -131,57 +131,71 @@
                                                                     <div class="row mt-4">
                                                                         <div class="col">
                                                                             <label for="size">Product Size</label>
-<select required name="size" id="size" class="form-control"
-    aria-label="Default select example" disabled="">
+                                                                            <select required name="size" id="size"
+                                                                                class="form-control"
+                                                                                aria-label="Default select example"
+                                                                                disabled="">
 
-@php
-    $sizeExploded = explode('-', $sizeRange ?? '');
+                                                                                @php
+                                                                                    $sizeExploded = explode(
+                                                                                        '-',
+                                                                                        $sizeRange ?? '',
+                                                                                    );
 
-    $sizeMinRaw = isset($sizeExploded[0]) ? trim($sizeExploded[0]) : '0';
-    $sizeMaxRaw = isset($sizeExploded[1]) ? trim($sizeExploded[1]) : '0';
+                                                                                    $sizeMinRaw = isset(
+                                                                                        $sizeExploded[0],
+                                                                                    )
+                                                                                        ? trim($sizeExploded[0])
+                                                                                        : '0';
+                                                                                    $sizeMaxRaw = isset(
+                                                                                        $sizeExploded[1],
+                                                                                    )
+                                                                                        ? trim($sizeExploded[1])
+                                                                                        : '0';
 
-    // INTEGER VALUES
-    $sizeMin = (int)$sizeMinRaw;
-    $sizeMax = (int)$sizeMaxRaw;
+                                                                                    // INTEGER VALUES
+                                                                                    $sizeMin = (int) $sizeMinRaw;
+                                                                                    $sizeMax = (int) $sizeMaxRaw;
 
-    // CURRENT ORDER SIZE
-    $currentSize = trim((string)$order->order_product_size);
+                                                                                    // CURRENT ORDER SIZE
+                                                                                    $currentSize = trim(
+                                                                                        (string) $order->order_product_size,
+                                                                                    );
 
-    // CHECK IF RANGE STARTS WITH 00
-    $startsWithDoubleZero = ($sizeMinRaw === '00');
-@endphp
+                                                                                    // CHECK IF RANGE STARTS WITH 00
+                                                                                    $startsWithDoubleZero =
+                                                                                        $sizeMinRaw === '00';
+                                                                                @endphp
 
-    {{-- ========================================= --}}
-    {{-- ADD 00 OPTION --}}
-    {{-- ========================================= --}}
-    @if($startsWithDoubleZero)
+                                                                                {{-- ========================================= --}}
+                                                                                {{-- ADD 00 OPTION --}}
+                                                                                {{-- ========================================= --}}
+                                                                                @if ($startsWithDoubleZero)
+                                                                                    <option value="00"
+                                                                                        @if ($currentSize === '00') selected @endif>
+                                                                                        00
+                                                                                    </option>
+                                                                                @endif
 
-        <option value="00"
-            @if($currentSize === '00') selected @endif>
-            00
-        </option>
+                                                                                {{-- ========================================= --}}
+                                                                                {{-- NORMAL LOOP --}}
+                                                                                {{-- ========================================= --}}
+                                                                                @for ($iNow = $sizeMin; $iNow <= $sizeMax; $iNow += 2)
+                                                                                    @php
+                                                                                        $loopSize = (string) $iNow;
+                                                                                    @endphp
 
-    @endif
+                                                                                    <option value="{{ $loopSize }}"
+                                                                                        @if ($currentSize === $loopSize) selected @endif>
 
-    {{-- ========================================= --}}
-    {{-- NORMAL LOOP --}}
-    {{-- ========================================= --}}
-    @for ($iNow = $sizeMin; $iNow <= $sizeMax; $iNow += 2)
+                                                                                        {{ $loopSize }}
 
-        @php
-            $loopSize = (string)$iNow;
-        @endphp
+                                                                                    </option>
+                                                                                @endfor
+                                                                            </select>
 
-        <option value="{{ $loopSize }}"
-            @if($currentSize === $loopSize) selected @endif>
-
-            {{ $loopSize }}
-
-        </option>
-
-    @endfor
-
-</select>
+                                                                            {{-- Hidden input to submit size value since select is disabled --}}
+                                                                            <input type="hidden" name="size" value="{{ $currentSize }}">
                                                                         </div>
                                                                         <div class="col">
                                                                             <label for="quantity">Order Quantity</label>
@@ -221,8 +235,8 @@
                                                                                     Products</label>
                                                                                 <select
                                                                                     class="form-control @error('sub_products') is-invalid @enderror"
-                                                                                    id="sub_products" name="sub_products[]"
-                                                                                    multiple>
+                                                                                    id="sub_products"
+                                                                                    name="sub_products[]" multiple>
                                                                                     @php
 
                                                                                         $selectedSubProducts = old(
@@ -325,7 +339,7 @@
                 }
             });
 
-            // Get cost on style change        
+            // Get cost on style change
             $('#style').change(function() {
                 $.ajax({
                     url: "{{ route('get.cost') }}",
