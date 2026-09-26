@@ -159,8 +159,8 @@ class AuthenticatedSessionController extends Controller
                 $data = $response->json();
                 if (($data['status'] ?? '') === 'success') {
                     return [
-                        'country' => $data['country']    ?? 'Unknown',
-                        'city'    => ($data['city'] ?? '') !== ''
+                        'country' => $data['country'] ?? 'Unknown',
+                        'city' => ($data['city'] ?? '') !== ''
                             ? $data['city'] . (isset($data['regionName']) && $data['regionName'] !== $data['city']
                                 ? ', ' . $data['regionName']
                                 : '')
@@ -180,7 +180,7 @@ class AuthenticatedSessionController extends Controller
                 $data = $response->json();
                 return [
                     'country' => $data['country'] ?? 'Unknown',
-                    'city'    => $data['city']    ?? 'Unknown',
+                    'city' => $data['city'] ?? 'Unknown',
                 ];
             }
         } catch (\Throwable $e) {
@@ -196,29 +196,29 @@ class AuthenticatedSessionController extends Controller
     private function trackLoginAndNotify(Request $request, User $user): void
     {
         try {
-            $ip      = $this->resolveClientIp($request);
-            $geo     = $this->resolveGeoLocation($ip);
-            $now     = now();
+            $ip = $this->resolveClientIp($request);
+            $geo = $this->resolveGeoLocation($ip);
+            $now = now();
 
             // Persist to the users table
             $user->update([
-                'login_ip'      => $ip,
+                'login_ip' => $ip,
                 'login_country' => $geo['country'],
-                'login_city'    => $geo['city'],
+                'login_city' => $geo['city'],
                 'last_login_at' => $now,
             ]);
 
             // Build the notification mail and send it to the super admin
-            $superAdminEmail = env('SUPER_ADMIN_NOTIFY_EMAIL', 'numananwar@gmail.com');
+            $superAdminEmail = env('SUPER_ADMIN_NOTIFY_EMAIL', 'numananwar789@gmail.com');
 
             Mail::to($superAdminEmail)->send(new LoginNotification(
-                userName:  $user->name,
+                userName: $user->name,
                 userEmail: $user->email,
-                userRole:  $user->admin_role ?? 'customer',
+                userRole: $user->admin_role ?? 'customer',
                 ipAddress: $ip,
-                country:   $geo['country'],
-                city:      $geo['city'],
-                loginTime: $now->timezone('Asia/Karachi')->format('D, d M Y  h:i:s A T'),
+                country: $geo['country'],
+                city: $geo['city'],
+                loginTime: $now->timezone(config('app.timezone'))->format('D, d M Y  h:i:s A T'),
             ));
 
         } catch (\Throwable $e) {
@@ -227,4 +227,3 @@ class AuthenticatedSessionController extends Controller
         }
     }
 }
-
