@@ -4,7 +4,7 @@
 
 A user has successfully signed in to **{{ config('app.name') }}**.
 
-### Login Details
+## Login Details
 
 @component('mail::table')
 | | |
