@@ -21,7 +21,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-       Schema::defaultStringLength(191);
-       View::addNamespace('mail', resource_path('views/vendor/mail'));
+        Schema::defaultStringLength(191);
+        View::addNamespace('mail', resource_path('views/vendor/mail/html'));
     }
 }
