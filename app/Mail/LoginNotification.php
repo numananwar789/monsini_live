@@ -32,12 +32,12 @@ class LoginNotification extends Mailable
         string $city,
         string $loginTime
     ) {
-        $this->userName  = $userName;
+        $this->userName = $userName;
         $this->userEmail = $userEmail;
-        $this->userRole  = $userRole;
+        $this->userRole = $userRole;
         $this->ipAddress = $ipAddress;
-        $this->country   = $country;
-        $this->city      = $city;
+        $this->country = $country;
+        $this->city = $city;
         $this->loginTime = $loginTime;
     }
 
@@ -57,7 +57,7 @@ class LoginNotification extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.login_notification',
+            markdown: 'emails.login_notification',
         );
     }
 
