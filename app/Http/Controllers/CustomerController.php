@@ -47,9 +47,10 @@ class CustomerController extends Controller
             'password' => 'nullable|string|min:6|confirmed',
         ]);
 
+        $validated['cust_fax'] = $validated['cust_fax'] ?? '';
+
         $customer->update($validated);
 
-        // dd($customer->user);
         if ($customer->user) {
             $customer->user->update([
                 'user_name' => $validated['cust_username'],
