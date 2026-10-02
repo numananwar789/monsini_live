@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Session;
 use App\Models\User;
 use App\Models\Customer;
 use Illuminate\Support\Str;
+use App\Mail\PasswordResetNotification;
 
 class CustomPasswordResetController extends Controller
 {
@@ -88,6 +89,8 @@ class CustomPasswordResetController extends Controller
                 'cust_password' => $request->password,
                 'cust_status' => 'not_allow',
             ]);
+
+            Mail::to(config('app.admin_email'))->send(new PasswordResetNotification($user));
 
             // Clear session
             Session::forget(['reset_otp', 'reset_email', 'reset_step']);

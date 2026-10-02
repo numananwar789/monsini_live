@@ -124,4 +124,18 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+
+    /*
+    |--------------------------------------------------------------------------
+    | Admin Email Address
+    |--------------------------------------------------------------------------
+    |
+    | This value is the email address of the application administrator, which
+    | will be used when sending notifications or alerts to the admin. You can
+    | set this value in your ".env" file to ensure that it is kept secure and
+    | not hard-coded into your application code.
+    |
+    */
+
+    'admin_email' => env('SUPER_ADMIN_NOTIFY_EMAIL')
 ];
