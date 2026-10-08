@@ -27,6 +27,10 @@
                     @error('password')
                         <p class="text-danger">{{ $message }}</p>
                     @enderror
+
+                    @error('password_confirmation')
+                        <div class="text-danger">{{ $message }}</div>
+                    @enderror
                     <div>
                         <button type="submit" class="btn btn-primary mb-4 shadow-2">Reset Password</button>
                         <p class="mb-0 text-muted">Remembered password? <a href="{{ route('login') }}">Login</a></p>

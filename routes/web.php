@@ -53,6 +53,9 @@ Route::get('/custom-password-otp', [CustomPasswordResetController::class, 'showO
 Route::post('/custom-password-verify', [CustomPasswordResetController::class, 'verifyOtp'])
     ->name('custom.password.verify');
 
+Route::get('/custom-password-new', [CustomPasswordResetController::class, 'showResetForm'])
+    ->name('custom.password.new');
+
 Route::post('/custom-password-reset', [CustomPasswordResetController::class, 'resetPassword'])
     ->name('custom.password.update');
 

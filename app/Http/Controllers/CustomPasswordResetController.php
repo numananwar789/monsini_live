@@ -66,6 +66,16 @@ class CustomPasswordResetController extends Controller
 
         Session::put('reset_step', 3);
 
+        return redirect()->route('custom.password.new');
+    }
+
+    // Show new password form
+    public function showResetForm()
+    {
+        if (Session::get('reset_step') !== 3) {
+            return redirect()->route('custom.password.request');
+        }
+
         return view('auth.custom-passwords.reset');
     }
 
