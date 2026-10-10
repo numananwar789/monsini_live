@@ -16,12 +16,12 @@ class CustProductController extends Controller
     public function index()
     {
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
-    
+
         $products = Product::leftJoin('dt_inventory', 'dt_product.product_ID', '=', 'dt_inventory.product_ID')
             ->leftJoin('dt_product_year_control as pyc', 'pyc.year', '=', 'dt_product.version_year')
             ->selectRaw("
                 dt_product.product_style,
-            
+
                 MAX(dt_product.product_ID) as product_ID,
                 MAX(dt_product.product_image) as product_image,
                 MAX(dt_product.factory_style) as factory_style,
@@ -32,22 +32,22 @@ class CustProductController extends Controller
                 MAX(dt_product.product_status) as product_status,
                 MAX(dt_product.sub_products) as sub_products,
                 MAX(dt_product.show_from_inventory) as inventory_override,
-            
-                CASE 
-                    WHEN MAX(dt_product.product_status) = 0 
-                         AND MAX(dt_product.show_from_inventory) = 1 
-                    THEN 1 
-                    ELSE 0 
+
+                CASE
+                    WHEN MAX(dt_product.product_status) = 0
+                         AND MAX(dt_product.show_from_inventory) = 1
+                    THEN 1
+                    ELSE 0
                 END as use_inventory,
-            
+
                 COALESCE(SUM(
-                    CASE 
-                        WHEN dt_inventory.product_quantity > 0 
-                        THEN dt_inventory.product_quantity 
-                        ELSE 0 
+                    CASE
+                        WHEN dt_inventory.product_quantity > 0
+                        THEN dt_inventory.product_quantity
+                        ELSE 0
                     END
                 ), 0) as inventory_count,
-            
+
                 (
                     SELECT COALESCE(SUM(dtoa.order_quantity), 0)
                     FROM dt_order_allocation dtoa
@@ -55,18 +55,18 @@ class CustProductController extends Controller
                     AND dtoa.order_customer_name = '{$ownerComp}'
                     AND dtoa.order_quantity > 0
                 ) as onway_count,
-            
+
                 (
                     COALESCE(SUM(
-                        CASE 
-                            WHEN dt_inventory.product_quantity > 0 
-                            THEN dt_inventory.product_quantity 
-                            ELSE 0 
+                        CASE
+                            WHEN dt_inventory.product_quantity > 0
+                            THEN dt_inventory.product_quantity
+                            ELSE 0
                         END
                     ), 0)
-            
+
                     +
-            
+
                     (
                         SELECT COALESCE(SUM(dtoa.order_quantity), 0)
                         FROM dt_order_allocation dtoa
@@ -75,40 +75,40 @@ class CustProductController extends Controller
                         AND dtoa.order_quantity > 0
                     )
                 ) as total_available_quantity,
-            
+
                 CASE
                     WHEN MAX(dt_product.product_status) = 1 THEN 1
-                    WHEN MAX(dt_product.product_status) = 0 
-                         AND MAX(dt_product.show_from_inventory) = 1 
-                         AND MAX(CASE 
-                             WHEN dt_inventory.product_quantity > 0 THEN 1 
-                             ELSE 0 
+                    WHEN MAX(dt_product.product_status) = 0
+                         AND MAX(dt_product.show_from_inventory) = 1
+                         AND MAX(CASE
+                             WHEN dt_inventory.product_quantity > 0 THEN 1
+                             ELSE 0
                          END) = 1
                     THEN 1
                     ELSE 0
                 END as is_available,
-            
+
                 -- GROUP_CONCAT(DISTINCT dt_product.product_color) as all_colors,
-                GROUP_CONCAT(DISTINCT 
-                    CASE 
-                        WHEN dt_product.product_status = 1 
+                GROUP_CONCAT(DISTINCT
+                    CASE
+                        WHEN dt_product.product_status = 1
                         THEN dt_product.product_color
                     END
                 ) as all_colors,
-                
+
                 GROUP_CONCAT(DISTINCT dt_product.product_size_range) as all_sizes,
-            
-                GROUP_CONCAT(DISTINCT 
-                    CASE 
-                        WHEN dt_inventory.product_quantity > 0 
-                        THEN dt_inventory.product_color 
+
+                GROUP_CONCAT(DISTINCT
+                    CASE
+                        WHEN dt_inventory.product_quantity > 0
+                        THEN dt_inventory.product_color
                     END
                 ) as in_stock_colors,
-            
-                GROUP_CONCAT(DISTINCT 
-                    CASE 
-                        WHEN dt_inventory.product_quantity > 0 
-                        THEN dt_inventory.product_size 
+
+                GROUP_CONCAT(DISTINCT
+                    CASE
+                        WHEN dt_inventory.product_quantity > 0
+                        THEN dt_inventory.product_size
                     END
                 ) as in_stock_sizes
             ")
@@ -119,17 +119,17 @@ class CustProductController extends Controller
             ->havingRaw('
                 MAX(dt_product.product_status) = 1
                 OR (
-                    MAX(dt_product.product_status) = 0 
+                    MAX(dt_product.product_status) = 0
                     AND MAX(dt_product.show_from_inventory) = 1
-                    AND MAX(CASE 
-                        WHEN dt_inventory.product_quantity > 0 THEN 1 
-                        ELSE 0 
+                    AND MAX(CASE
+                        WHEN dt_inventory.product_quantity > 0 THEN 1
+                        ELSE 0
                     END) = 1
                 )
             ')
             ->orderBy('dt_product.product_style')
             ->get();
-    
+
         return view('customer.products', compact('products', 'ownerComp'));
     }
 
@@ -158,7 +158,7 @@ class CustProductController extends Controller
 
         // Check if all arrays have the same count
 
-       
+
         $countArray = [
             count($colorsNow),
             count($sizeNow),
@@ -234,9 +234,18 @@ class CustProductController extends Controller
             $vendorID = $prodInfo->product_vendor_ID;
             $vendorName = $prodInfo->product_vendor_name;
             $productID = $prodInfo->product_ID;
-            $orderCost = $prodSize < 18
-                ? $prodQuant * $prodInfo->product_wholesale_price
-                : $prodQuant * ($prodInfo->product_wholesale_price + 30);
+            // $orderCost = $prodSize < 18
+            //     ? $prodQuant * $prodInfo->product_wholesale_price
+            //     : $prodQuant * ($prodInfo->product_wholesale_price + 30);
+
+            $basePrice = $prodInfo->product_wholesale_price;
+            $addition = 0;
+
+            if ($prodSize >= 18) {
+                $addition = strtoupper(substr($prodStyle, 0, 1)) === 'B' ? 60 : 30;
+            }
+
+            $orderCost = $prodQuant * ($basePrice + $addition);
 
             $orderPurchasePrice = $prodQuant * $prodInfo->product_cost;
             $orderNote = "NA";
@@ -587,10 +596,10 @@ class CustProductController extends Controller
     public function popup(Request $request)
     {
         $id = $request->id;
-    
+
         $ownerComp = Customer::where('cust_owner', 'Yes')
             ->value('cust_comp_name');
-    
+
         // Product meta
         $productMeta = Product::where('product_style', $id)
             ->selectRaw('
@@ -598,10 +607,10 @@ class CustProductController extends Controller
                 MAX(show_from_inventory) as show_from_inventory
             ')
             ->first();
-    
+
         $productStatus = $productMeta->product_status ?? 0;
         $showFromInventory = $productMeta->show_from_inventory ?? 0;
-    
+
         // ✅ FIXED ON WAY (GROUPED)
         $onWay = DB::table('dt_order_allocation')
             ->select(
@@ -615,12 +624,12 @@ class CustProductController extends Controller
             ->where('order_quantity', '>', 0)
             ->groupBy('order_product_style', 'order_product_color', 'order_product_size')
             ->get();
-    
+
         // ============================================
         // CASE 1: Inventory Mode
         // ============================================
         if ($productStatus == 0 && $showFromInventory == 1) {
-    
+
             $stock = DB::table('dt_inventory')
                 ->select(
                     'product_style',
@@ -632,10 +641,10 @@ class CustProductController extends Controller
                 ->groupBy('product_style', 'product_color', 'product_size')
                 ->havingRaw('SUM(product_quantity) > 0')
                 ->get();
-    
+
             $sizes  = $stock->pluck('product_size')->unique()->values();
             $colors = $stock->pluck('product_color')->unique()->values();
-    
+
             return response()->json([
                 'mode'     => 'inventory',
                 'products' => [],
@@ -645,7 +654,7 @@ class CustProductController extends Controller
                 'colors'   => $colors,
             ]);
         }
-    
+
         // ============================================
         // CASE 2: Active Product
         // ============================================
@@ -659,7 +668,7 @@ class CustProductController extends Controller
                 $item->product_size_range
             ])
             ->toArray();
-    
+
         $stock = DB::table('dt_inventory')
             ->select(
                 'product_style',
@@ -671,7 +680,7 @@ class CustProductController extends Controller
             ->groupBy('product_style', 'product_color', 'product_size')
             ->havingRaw('SUM(product_quantity) > 0') // ✅ FIXED
             ->get();
-    
+
         return response()->json([
             'mode'     => 'normal',
             'products' => $products,

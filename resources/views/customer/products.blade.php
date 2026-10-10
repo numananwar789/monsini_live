@@ -16,6 +16,17 @@
         <div class="col">
             <h5 class="mb-0 text-uppercase">All Products</h5>
             <hr />
+            @if (session('success'))
+                <div class="alert alert-success">
+                    {{ session('success') }}
+                </div>
+            @endif
+
+            @if (session('error'))
+                <div class="alert alert-danger">
+                    {{ session('error') }}
+                </div>
+            @endif
             <div class="card">
                 <div class="card-body">
                     <div class="table-responsive">
