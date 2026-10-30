@@ -1,34 +1,37 @@
 @extends('layouts.app')
 
 @section('page-css')
-    <link href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/datetime/1.1.2/css/dataTables.dateTime.min.css" rel="stylesheet" />
-    <link href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.dataTables.min.css" rel="stylesheet" />
-    
-    <style>
-        .dt-buttons {
-            margin-left: 20px !important;
+<link href="https://cdn.datatables.net/1.12.1/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="https://cdn.datatables.net/datetime/1.1.2/css/dataTables.dateTime.min.css" rel="stylesheet" />
+<link href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.dataTables.min.css" rel="stylesheet" />
+
+<style>
+    .dt-buttons {
+        margin-left: 20px !important;
+    }
+
+    .dataTables_wrapper {
+        margin-top: 5px;
+    }
+
+    .custom-select-box {
+        border: 1px solid #aaa;
+        border-radius: 3px;
+        padding: 5px;
+        background-color: transparent;
+        padding: 4px;
+        font-size: 17px;
+        margin-right: 10px;
+    }
+
+    @media screen and (min-width: 1200px) {
+        .custom-select-box-main {
+            gap: 10px;
+            margin-bottom: -41px !important;
+            justify-content: end;
         }
-        .dataTables_wrapper {
-            margin-top: 5px;
-        }
-        .custom-select-box {
-            border: 1px solid #aaa;
-            border-radius: 3px;
-            padding: 5px;
-            background-color: transparent;
-            padding: 4px;
-            font-size: 17px;
-            margin-right: 10px;
-        }
-        @media screen and (min-width: 1200px) {
-            .custom-select-box-main {
-                gap: 10px;
-                margin-bottom: -41px !important;
-                justify-content: end;
-            }
-        }
-    </style>
+    }
+</style>
 @endsection
 
 @section('content')
@@ -46,9 +49,9 @@
                                         <select name="selected_archive" class="form-select form-select-sm custom-select-box" title="select-archive">
                                             <option disabled selected>Select an Archive</option>
                                             @foreach($archiveList as $archive)
-                                                <option value="{{ $archive }}" {{ request('selected_archive') == $archive ? 'selected' : '' }}>
-                                                    {{ $archive }}
-                                                </option>
+                                            <option value="{{ $archive }}" {{ request('selected_archive') == $archive ? 'selected' : '' }}>
+                                                {{ $archive }}
+                                            </option>
                                             @endforeach
                                         </select>
                                         <button type="submit" name="action" class="btn btn-success btn-sm">Filter</button>
@@ -72,8 +75,11 @@
                                     <li class="nav-item">
                                         <a class="nav-link" id="report_5_tab" data-toggle="tab" href="#report_5" role="tab" aria-controls="report_5" aria-selected="false">Late Vendors</a>
                                     </li>
+                                    <li class="nav-item">
+                                        <a class="nav-link" id="report_6_tab" data-toggle="tab" href="#report_6" role="tab" aria-controls="report_6" aria-selected="false">Top Vendor</a>
+                                    </li>
                                 </ul>
-                                
+
                                 <div class="tab-content" id="myTabContent">
                                     <div class="tab-pane fade show active" id="report_1" role="tabpanel" aria-labelledby="home-report_1_tab">
                                         <h5 class="mb-0 text-uppercase">Total Orders</h5>
@@ -111,26 +117,26 @@
                                     <div class="tab-pane fade" id="report_2" role="tabpanel" aria-labelledby="home-report_2_tab">
                                         <div class="d-flex justify-content-between align-items-center mb-3">
                                             <h5 class="mb-0 text-uppercase">Top Sold Styles</h5>
-                                            
+
                                             <form action="{{ route('reports.index') }}" method="GET" class="d-flex align-items-center">
                                                 @if(request('selected_archive'))
-                                                    <input type="hidden" name="selected_archive" value="{{ request('selected_archive') }}">
-                                                    <input type="hidden" name="action" value="filter">
+                                                <input type="hidden" name="selected_archive" value="{{ request('selected_archive') }}">
+                                                <input type="hidden" name="action" value="filter">
                                                 @endif
-                                            
+
                                                 <div class="form-check me-3">
-                                                    <input class="form-check-input" type="checkbox" name="exclude_stock" id="excludeStockCheck" 
-                                                           {{ request()->has('exclude_stock') ? 'checked' : '' }} 
-                                                           onchange="this.form.submit()"> 
+                                                    <input class="form-check-input" type="checkbox" name="exclude_stock" id="excludeStockCheck"
+                                                        {{ request()->has('exclude_stock') ? 'checked' : '' }}
+                                                        onchange="this.form.submit()">
                                                     <label class="form-check-label" for="excludeStockCheck">
                                                         Without Stock
                                                     </label>
                                                 </div>
                                             </form>
                                         </div>
-                                        
+
                                         <hr />
-    
+
                                         <div class="table-responsive">
                                             <table id="example2" class="table table-striped table-bordered display nowrap" style="width:100%">
                                                 <thead>
@@ -176,7 +182,7 @@
                                                     </tr>
                                                 </thead>
                                                 <tbody>
-                                                    
+
                                                     @foreach($custHistory as $history)
                                                     <tr>
                                                         <td>{{ ucwords($history->order_customer_name) }}</td>
@@ -213,7 +219,7 @@
                                                         <td>{{ ucwords($customer['order_customer_name']) }}</td>
                                                         <td data-order="{{ $customer['total_count'] }}">
                                                             <!--{{ $customer['total_count'] }}-->
-                                                         {{ $customer['stock_special_split'] }}    
+                                                            {{ $customer['stock_special_split'] }}
                                                         </td>
                                                         <td>{{ strtoupper($customer['OrdersTables']) }}</td>
                                                     </tr>
@@ -245,7 +251,7 @@
                                                 <tbody>
                                                     @foreach($lateVendors as $vendor)
                                                     @php
-                                                        $etaExplode = explode(' ', $vendor->ETA);
+                                                    $etaExplode = explode(' ', $vendor->ETA);
                                                     @endphp
                                                     <tr>
                                                         <td>{{ strtoupper($vendor->order_vendor_name) }}</td>
@@ -264,6 +270,35 @@
                                             </table>
                                         </div>
                                     </div>
+
+                                    <div class="tab-pane fade" id="report_6" role="tabpanel" aria-labelledby="report_6_tab">
+                                        <h5 class="mb-0 text-uppercase">Top Vendor</h5>
+                                        <hr />
+                                        <div class="table-responsive">
+                                            <table id="example6" class="table table-striped table-bordered display nowrap" style="width:100%">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Vendor Name</th>
+                                                        <th>Dresses Ordered</th>
+                                                        <th>Stock / Specials</th>
+                                                        <th>Orders</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach($topVendors as $vendor)
+                                                    <tr>
+                                                        <td>{{ strtoupper($vendor['order_vendor_name']) }}</td>
+                                                        <td data-order="{{ $vendor['total_count'] }}">
+                                                            <strong>{{ $vendor['total_count'] }}</strong>
+                                                        </td>
+                                                        <td>{{ $vendor['stock_special_split'] }}</td>
+                                                        <td>{{ strtoupper($vendor['OrdersTables']) }}</td>
+                                                    </tr>
+                                                    @endforeach
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -276,78 +311,81 @@
 @endsection
 
 @section('page-js')
-    <script src="/assets/plugins/amchart/js/amcharts.js"></script>
-    <script src="/assets/plugins/amchart/js/gauge.js"></script>
-    <script src="/assets/plugins/amchart/js/serial.js"></script>
-    <script src="/assets/plugins/amchart/js/light.js"></script>
-    <script src="/assets/plugins/amchart/js/pie.min.js"></script>
-    <script src="/assets/plugins/amchart/js/ammap.min.js"></script>
-    <script src="/assets/plugins/amchart/js/usaLow.js"></script>
-    <script src="/assets/plugins/amchart/js/radar.js"></script>
-    <script src="/assets/plugins/amchart/js/worldLow.js"></script>
-    <script src="/assets/plugins/notification/js/bootstrap-growl.min.js"></script>
+<script src="/assets/plugins/amchart/js/amcharts.js"></script>
+<script src="/assets/plugins/amchart/js/gauge.js"></script>
+<script src="/assets/plugins/amchart/js/serial.js"></script>
+<script src="/assets/plugins/amchart/js/light.js"></script>
+<script src="/assets/plugins/amchart/js/pie.min.js"></script>
+<script src="/assets/plugins/amchart/js/ammap.min.js"></script>
+<script src="/assets/plugins/amchart/js/usaLow.js"></script>
+<script src="/assets/plugins/amchart/js/radar.js"></script>
+<script src="/assets/plugins/amchart/js/worldLow.js"></script>
+<script src="/assets/plugins/notification/js/bootstrap-growl.min.js"></script>
 
-    <script src="https://code.jquery.com/jquery-3.5.1.js"></script>
-    <script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.2/moment.min.js"></script>
-    <script src="https://cdn.datatables.net/datetime/1.1.2/js/dataTables.dateTime.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.print.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.3.2/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.3.2/js/buttons.html5.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/1.2.2/js/buttons.print.min.js"></script>
-    
-    <script>
-        $(document).ready(function() {
-            // Initialize all tables with common settings
-            function initDataTable(tableId, title, orderColumn = null) {
-                return $(tableId).DataTable({
-                    aLengthMenu: [
-                        [25, 50, 100, 200, -1],
-                        [25, 50, 100, 200, "All"]
-                    ],
-                    dom: 'lBfrtip',
-                    buttons: [
-                        'copyHtml5',
-                        {
-                            extend: 'print',
-                            title: `Report | ${title}`,
-                            customize: function(win) {
-                                $(win.document.body).find('tr:nth-child(odd) td').each(function(index) {
-                                    $(this).css('background-color', '#f4f4f4');
-                                });
-                            }
-                        },
-                        {
-                            extend: 'excelHtml5',
-                            title: `Report | ${title}`
-                        },
-                        {
-                            extend: 'csvHtml5',
-                            title: `Report | ${title}`
-                        },
-                        {
-                            extend: 'pdfHtml5',
-                            title: `Report | ${title}`
+<script src="https://code.jquery.com/jquery-3.5.1.js"></script>
+<script src="https://cdn.datatables.net/1.12.1/js/jquery.dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.2/moment.min.js"></script>
+<script src="https://cdn.datatables.net/datetime/1.1.2/js/dataTables.dateTime.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.print.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.1/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.1.3/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.1.53/vfs_fonts.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.3.2/js/buttons.html5.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/1.2.2/js/buttons.print.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        // Initialize all tables with common settings
+        function initDataTable(tableId, title, orderColumn = null) {
+            return $(tableId).DataTable({
+                aLengthMenu: [
+                    [25, 50, 100, 200, -1],
+                    [25, 50, 100, 200, "All"]
+                ],
+                dom: 'lBfrtip',
+                buttons: [
+                    'copyHtml5',
+                    {
+                        extend: 'print',
+                        title: `Report | ${title}`,
+                        customize: function(win) {
+                            $(win.document.body).find('tr:nth-child(odd) td').each(function(index) {
+                                $(this).css('background-color', '#f4f4f4');
+                            });
                         }
-                    ],
-                    order: orderColumn ? [[orderColumn, 'desc']] : []
-                });
-            }
+                    },
+                    {
+                        extend: 'excelHtml5',
+                        title: `Report | ${title}`
+                    },
+                    {
+                        extend: 'csvHtml5',
+                        title: `Report | ${title}`
+                    },
+                    {
+                        extend: 'pdfHtml5',
+                        title: `Report | ${title}`
+                    }
+                ],
+                order: orderColumn ? [
+                    [orderColumn, 'desc']
+                ] : []
+            });
+        }
 
-            // Initialize each table
-            initDataTable('#example', 'Total Orders');
-            initDataTable('#example2', 'Top Sold Styles', 1);
-            initDataTable('#example3', 'Customer Total History');
-            initDataTable('#example4', 'Top Customers', 1);
-            initDataTable('#example5', 'Late Vendors');
-            
-            // Note: The client-side filter logic has been removed as filtering 
-            // is now handled server-side via the controller.
-        });
-    </script>
+        // Initialize each table
+        initDataTable('#example', 'Total Orders');
+        initDataTable('#example2', 'Top Sold Styles', 1);
+        initDataTable('#example3', 'Customer Total History');
+        initDataTable('#example4', 'Top Customers', 1);
+        initDataTable('#example5', 'Late Vendors');
+        initDataTable('#example6', 'Top Vendor', 1);
+
+        // Note: The client-side filter logic has been removed as filtering 
+        // is now handled server-side via the controller.
+    });
+</script>
 @endsection

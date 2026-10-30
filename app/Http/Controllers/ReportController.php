@@ -8,7 +8,6 @@ use App\Models\OrderAllocation;
 use App\Models\OrderHistory;
 use App\Models\OrderHistoryArchive;
 use App\Models\Customer;
-use App\Models\Vendor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -34,6 +33,7 @@ class ReportController extends Controller
             $custHistory = OrderHistoryArchive::where('archive_name', $selectedArchive)->get();
             $topCust     = $this->getTopCustomers($selectedArchive);
             $lateVendors = $this->getLateVendors($selectedArchive);
+            $topVendors  = $this->getTopVendors($selectedArchive);
         } else {
             // ── LIVE MODE ─────────────────────────────────────────────────
             // Data comes from all four live tables
@@ -43,11 +43,18 @@ class ReportController extends Controller
             $custHistory = $this->getCustomerHistory($styleLookup);
             $topCust     = $this->getTopCustomers();
             $lateVendors = $this->getLateVendors();
+            $topVendors  = $this->getTopVendors();
         }
 
         return view('reports.index', compact(
-            'ownerComp', 'archiveList', 'totOrders',
-            'topStyles', 'custHistory', 'topCust', 'lateVendors'
+            'ownerComp',
+            'archiveList',
+            'totOrders',
+            'topStyles',
+            'custHistory',
+            'topCust',
+            'lateVendors',
+            'topVendors'
         ));
     }
 
@@ -85,21 +92,53 @@ class ReportController extends Controller
     protected function getCustomerHistory($styleLookup)
     {
         $results = Order::where('order_status', 'Pending')
-            ->select('order_customer_name', 'order_product_style', 'order_product_color',
-                     'order_product_size', 'purchase_id', 'order_status', 'created_at', 'order_quantity')
+            ->select(
+                'order_customer_name',
+                'order_product_style',
+                'order_product_color',
+                'order_product_size',
+                'purchase_id',
+                'order_status',
+                'created_at',
+                'order_quantity'
+            )
             ->unionAll(
                 OrderFinal::where('order_status', '<>', 'Placed')
-                    ->select('order_customer_name', 'order_product_style', 'order_product_color',
-                             'order_product_size', 'purchase_id', 'order_status', 'created_at', 'order_quantity')
+                    ->select(
+                        'order_customer_name',
+                        'order_product_style',
+                        'order_product_color',
+                        'order_product_size',
+                        'purchase_id',
+                        'order_status',
+                        'created_at',
+                        'order_quantity'
+                    )
             )
             ->unionAll(
                 OrderAllocation::where('order_status', '<>', 'Allocated')
-                    ->select('order_customer_name', 'order_product_style', 'order_product_color',
-                             'order_product_size', 'purchase_id', DB::raw("'Sent to Vendor'"), 'created_at', 'order_quantity')
+                    ->select(
+                        'order_customer_name',
+                        'order_product_style',
+                        'order_product_color',
+                        'order_product_size',
+                        'purchase_id',
+                        DB::raw("'Sent to Vendor'"),
+                        'created_at',
+                        'order_quantity'
+                    )
             )
             ->unionAll(
-                OrderHistory::select('order_customer_name', 'order_product_style', 'order_product_color',
-                                     'order_product_size', 'purchase_id', DB::raw("'Allocated'"), 'created_at', 'order_quantity')
+                OrderHistory::select(
+                    'order_customer_name',
+                    'order_product_style',
+                    'order_product_color',
+                    'order_product_size',
+                    'purchase_id',
+                    DB::raw("'Allocated'"),
+                    'created_at',
+                    'order_quantity'
+                )
             )
             ->get();
 
@@ -288,19 +327,19 @@ class ReportController extends Controller
                 SELECT order_customer_name, order_quantity, purchase_id, 'H' AS type
                 FROM dt_order_history
             ) AS t"))
-            ->select(
-                'order_customer_name',
-                DB::raw("SUM(order_quantity) AS total_count"),
-                DB::raw("SUM(CASE WHEN purchase_id = 'stock' THEN order_quantity ELSE 0 END) AS stock_qty"),
-                DB::raw("SUM(CASE WHEN purchase_id IS NULL OR purchase_id != 'stock' THEN order_quantity ELSE 0 END) AS special_qty"),
-                DB::raw("SUM(CASE WHEN type = 'O' THEN order_quantity ELSE 0 END) AS qty_o"),
-                DB::raw("SUM(CASE WHEN type = 'F' THEN order_quantity ELSE 0 END) AS qty_f"),
-                DB::raw("SUM(CASE WHEN type = 'A' THEN order_quantity ELSE 0 END) AS qty_a"),
-                DB::raw("SUM(CASE WHEN type = 'H' THEN order_quantity ELSE 0 END) AS qty_h")
-            )
-            ->groupBy('order_customer_name')
-            ->orderByDesc('total_count')
-            ->get();
+                ->select(
+                    'order_customer_name',
+                    DB::raw("SUM(order_quantity) AS total_count"),
+                    DB::raw("SUM(CASE WHEN purchase_id = 'stock' THEN order_quantity ELSE 0 END) AS stock_qty"),
+                    DB::raw("SUM(CASE WHEN purchase_id IS NULL OR purchase_id != 'stock' THEN order_quantity ELSE 0 END) AS special_qty"),
+                    DB::raw("SUM(CASE WHEN type = 'O' THEN order_quantity ELSE 0 END) AS qty_o"),
+                    DB::raw("SUM(CASE WHEN type = 'F' THEN order_quantity ELSE 0 END) AS qty_f"),
+                    DB::raw("SUM(CASE WHEN type = 'A' THEN order_quantity ELSE 0 END) AS qty_a"),
+                    DB::raw("SUM(CASE WHEN type = 'H' THEN order_quantity ELSE 0 END) AS qty_h")
+                )
+                ->groupBy('order_customer_name')
+                ->orderByDesc('total_count')
+                ->get();
         }
 
         return $customerTotals->sortByDesc('total_count')->map(function ($item) {
@@ -369,6 +408,72 @@ class ReportController extends Controller
         return DB::select($sql);
     }
 
+    /**
+     * @param  string|null $archiveName  NULL = live tables, string = archive table
+     */
+    protected function getTopVendors($archiveName = null)
+    {
+        if ($archiveName) {
+            // ── Archive Mode ──────────────────────────────────────────────
+            $vendorTotals = DB::table('dt_order_history_archive')
+                ->where('archive_name', $archiveName)
+                ->whereNotNull('order_vendor_name')
+                ->where('order_vendor_name', '!=', '')
+                ->select(
+                    DB::raw("TRIM(order_vendor_name) AS order_vendor_name"),
+                    DB::raw("SUM(order_quantity) AS total_count"),
+                    DB::raw("SUM(CASE WHEN purchase_id = 'stock' THEN order_quantity ELSE 0 END) AS stock_qty"),
+                    DB::raw("SUM(CASE WHEN purchase_id IS NULL OR purchase_id != 'stock' THEN order_quantity ELSE 0 END) AS special_qty"),
+                    DB::raw("0 AS qty_o"),
+                    DB::raw("0 AS qty_f"),
+                    DB::raw("0 AS qty_a"),
+                    DB::raw("SUM(order_quantity) AS qty_h")
+                )
+                ->groupBy(DB::raw("TRIM(order_vendor_name)"))
+                ->orderByDesc('total_count')
+                ->get();
+        } else {
+            // ── Live Mode (Union of 4 order tables) ────────────────────────
+            $vendorTotals = DB::table(DB::raw("(
+                SELECT TRIM(order_vendor_name) AS order_vendor_name, order_quantity, purchase_id, 'O' AS type
+                FROM dt_order WHERE order_status = 'Pending'
+                UNION ALL
+                SELECT TRIM(order_vendor_name) AS order_vendor_name, order_quantity, purchase_id, 'F' AS type
+                FROM dt_order_final WHERE order_status <> 'Placed'
+                UNION ALL
+                SELECT TRIM(order_vendor_name) AS order_vendor_name, order_quantity, purchase_id, 'A' AS type
+                FROM dt_order_allocation WHERE order_status <> 'Allocated'
+                UNION ALL
+                SELECT TRIM(order_vendor_name) AS order_vendor_name, order_quantity, purchase_id, 'H' AS type
+                FROM dt_order_history
+            ) AS t"))
+                ->whereNotNull('order_vendor_name')
+                ->where('order_vendor_name', '!=', '')
+                ->select(
+                    'order_vendor_name',
+                    DB::raw("SUM(order_quantity) AS total_count"),
+                    DB::raw("SUM(CASE WHEN purchase_id = 'stock' THEN order_quantity ELSE 0 END) AS stock_qty"),
+                    DB::raw("SUM(CASE WHEN purchase_id IS NULL OR purchase_id != 'stock' THEN order_quantity ELSE 0 END) AS special_qty"),
+                    DB::raw("SUM(CASE WHEN type = 'O' THEN order_quantity ELSE 0 END) AS qty_o"),
+                    DB::raw("SUM(CASE WHEN type = 'F' THEN order_quantity ELSE 0 END) AS qty_f"),
+                    DB::raw("SUM(CASE WHEN type = 'A' THEN order_quantity ELSE 0 END) AS qty_a"),
+                    DB::raw("SUM(CASE WHEN type = 'H' THEN order_quantity ELSE 0 END) AS qty_h")
+                )
+                ->groupBy('order_vendor_name')
+                ->orderByDesc('total_count')
+                ->get();
+        }
+
+        return $vendorTotals->sortByDesc('total_count')->map(function ($item) {
+            return [
+                'order_vendor_name'   => $item->order_vendor_name,
+                'total_count'         => (int) $item->total_count,
+                'stock_special_split' => "Stock: {$item->stock_qty} | Specials: {$item->special_qty}",
+                'OrdersTables'        => "ORDERS: {$item->qty_o} | FINAL: {$item->qty_f} | ALLOCATION: {$item->qty_a} | HISTORY: {$item->qty_h}",
+            ];
+        })->values()->toArray();
+    }
+
     // =========================================================================
     // Per-style per-table helpers (kept for any direct use elsewhere)
     // =========================================================================
@@ -376,7 +481,7 @@ class ReportController extends Controller
     protected function getFromOrder($order_product_style, $withStock = false)
     {
         $query = Order::where('order_product_style', $order_product_style)
-                      ->where('order_status', 'Pending');
+            ->where('order_status', 'Pending');
         if ($withStock) {
             $query->where(fn($q) => $q->where('purchase_id', '!=', 'stock')->orWhereNull('purchase_id'));
         }
@@ -386,7 +491,7 @@ class ReportController extends Controller
     protected function getFromOrderFinal($order_product_style, $withStock = false)
     {
         $query = OrderFinal::where('order_product_style', $order_product_style)
-                           ->where('order_status', '!=', 'Placed');
+            ->where('order_status', '!=', 'Placed');
         if ($withStock) {
             $query->where(fn($q) => $q->where('purchase_id', '!=', 'stock')->orWhereNull('purchase_id'));
         }
@@ -396,7 +501,7 @@ class ReportController extends Controller
     protected function getFromOrderAllocation($order_product_style, $withStock = false)
     {
         $query = OrderAllocation::where('order_product_style', $order_product_style)
-                                ->where('order_status', '!=', 'Allocated');
+            ->where('order_status', '!=', 'Allocated');
         if ($withStock) {
             $query->where(fn($q) => $q->where('purchase_id', '!=', 'stock')->orWhereNull('purchase_id'));
         }
