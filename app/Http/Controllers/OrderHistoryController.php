@@ -25,7 +25,7 @@ class OrderHistoryController extends Controller
     {
 
 
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 

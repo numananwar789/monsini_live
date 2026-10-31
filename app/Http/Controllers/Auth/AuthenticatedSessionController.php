@@ -31,7 +31,7 @@ class AuthenticatedSessionController extends Controller
     {
         $request->authenticate();
 
-        $customer = \App\Models\Customer::where('user_id', auth()->id())->first();
+        $customer = \App\Models\Customer::where('user_id', Auth::id())->first();
 
         // ⭐ Block login if customer is NOT allowed
         if ($customer && $customer->cust_status !== 'allow') {
@@ -45,9 +45,9 @@ class AuthenticatedSessionController extends Controller
         $request->session()->forget('url.intended');
 
         // 📍 Track IP & geolocation, then notify super admin
-        $this->trackLoginAndNotify($request, auth()->user());
+        $this->trackLoginAndNotify($request, Auth::user());
 
-        if (auth()->user()->admin_role != 'customer') {
+        if (Auth::user()->admin_role != 'customer') {
             return redirect()->intended(route('products.index', absolute: false));
         }
 
@@ -76,9 +76,9 @@ class AuthenticatedSessionController extends Controller
         $request->session()->forget('url.intended');
 
         // 📍 Track IP & geolocation, then notify super admin
-        $this->trackLoginAndNotify($request, auth()->user());
+        $this->trackLoginAndNotify($request, Auth::user());
 
-        if (auth()->user()->admin_role != 'customer') {
+        if (Auth::user()->admin_role != 'customer') {
             return redirect()->intended(route('products.index', absolute: false));
         }
 

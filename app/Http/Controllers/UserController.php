@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -18,7 +19,7 @@ class UserController extends Controller
     {
 
         
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
         
@@ -113,7 +114,7 @@ class UserController extends Controller
     public function destroy(User $user)
     {
         // Prevent deleting yourself
-        if ($user->id === auth()->id()) {
+        if ($user->id === Auth::id()) {
             return redirect()->back()
                 ->with('error', 'You cannot delete your own account');
         }

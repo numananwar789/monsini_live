@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Customer;
 
 use App\Imports\CustomerImport;
@@ -20,7 +21,7 @@ class CustomerController extends Controller
 
     public function index()
     {
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
         $customers = Customer::all();

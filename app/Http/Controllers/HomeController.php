@@ -11,7 +11,7 @@ class HomeController extends Controller
     public function index()
     {
         if (Auth::check()) {
-            if (auth()->user()->admin_role != 'customer') {
+            if (Auth::user()->admin_role != 'customer') {
                 return redirect()->route('products.index');
             }
             return redirect()->route('customer.products.index');

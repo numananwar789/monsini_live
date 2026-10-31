@@ -21,7 +21,7 @@ class OrderAllocationController extends Controller
 {
     public function index()
     {
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
@@ -207,7 +207,7 @@ class OrderAllocationController extends Controller
             </a>';
 
             // Delete buttons - exactly as in Blade (only for superadmin or admin1)
-            if (auth()->user()->admin_role == "superadmin" || auth()->user()->user_name == "admin1") {
+            if (Auth::user()->admin_role == "superadmin" || Auth::user()->user_name == "admin1") {
                 if ($order->given_by_invntry > 0 || $order->given_by_onway > 0) {
                     $actions .=
                         '<a target="_self" class="btn btn-danger mb-0 btn-sm"
@@ -481,7 +481,7 @@ class OrderAllocationController extends Controller
     public function toggleStaging($id)
     {
         // Check if user is authenticated and not customer
-        if (auth()->guest() || auth()->user()->admin_role === 'customer') {
+        if (Auth::guest() || Auth::user()->admin_role === 'customer') {
             return redirect('/'); // or use `route('login')`
         }
 
@@ -673,7 +673,7 @@ class OrderAllocationController extends Controller
 
     public function clearAllOrders()
     {
-        if (!auth()->user()->hasRole('superadmin')) {
+        if (!Auth::user()->hasRole('superadmin')) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -820,7 +820,7 @@ class OrderAllocationController extends Controller
 
     public function deleteFullOrder($id)
     {
-        if (auth()->guest() || auth()->user()->admin_role === 'customer') {
+        if (Auth::guest() || Auth::user()->admin_role === 'customer') {
             return redirect('/');
         }
 

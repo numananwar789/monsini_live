@@ -4,12 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\EmailBody;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class EmailBodyController extends Controller
 {
     public function index()
     {
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 

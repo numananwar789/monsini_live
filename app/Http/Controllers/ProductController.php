@@ -9,6 +9,7 @@ use App\Models\ProductArchive;
 use App\Models\Vendor;
 use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Imports\ProductsImport;
 use Shuchkin\SimpleXLSXGen;
 use Illuminate\Support\Facades\Cache;
@@ -24,7 +25,7 @@ class ProductController extends Controller
 
     public function index()
     {
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
@@ -160,7 +161,7 @@ class ProductController extends Controller
                 ->groupBy('product_style');
         }
 
-        $canEdit = auth()->user()->admin_role === 'superadmin' || auth()->user()->user_name == 'admin1';
+        $canEdit = Auth::user()->admin_role === 'superadmin' || Auth::user()->user_name == 'admin1';
 
         $data = [];
         foreach ($rows as $row) {

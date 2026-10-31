@@ -35,7 +35,7 @@ class OrderController extends Controller
 
     public function index()
     {
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
@@ -129,7 +129,7 @@ class OrderController extends Controller
         $rows = $query->get();
 
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
-        $canDelete = auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1';
+        $canDelete = Auth::user()->admin_role == 'superadmin' || Auth::user()->user_name == 'admin1';
 
         $data = [];
         foreach ($rows as $order) {

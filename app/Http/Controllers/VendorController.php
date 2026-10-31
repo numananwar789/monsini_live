@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Vendor;
 use App\Imports\VendorsImport;
 use Illuminate\Validation\Rule;
@@ -13,7 +14,7 @@ class VendorController extends Controller
     {
 
         
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
         

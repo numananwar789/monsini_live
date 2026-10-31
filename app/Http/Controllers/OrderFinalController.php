@@ -29,7 +29,7 @@ class OrderFinalController extends Controller
 {
     public function index()
     {
-        if (auth()->check() && auth()->user()->admin_role === 'customer') {
+        if (Auth::check() && Auth::user()->admin_role === 'customer') {
             return redirect()->intended('customer/products');
         }
 
@@ -121,7 +121,7 @@ class OrderFinalController extends Controller
         $rows = $query->get();
 
         $ownerComp = Customer::where('cust_owner', 'Yes')->value('cust_comp_name');
-        $canDelete = auth()->user()->admin_role == 'superadmin' || auth()->user()->user_name == 'admin1';
+        $canDelete = Auth::user()->admin_role == 'superadmin' || Auth::user()->user_name == 'admin1';
 
         $data = [];
         foreach ($rows as $order) {
@@ -923,7 +923,7 @@ class OrderFinalController extends Controller
 
     public function clearAllOrders()
     {
-        if (auth()->user()->admin_role !== 'superadmin') {
+        if (Auth::user()->admin_role !== 'superadmin') {
             abort(403, 'Unauthorized action.');
         }
 
