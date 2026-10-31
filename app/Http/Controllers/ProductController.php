@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Imports\ProductsImport;
 use Shuchkin\SimpleXLSXGen;
 use Illuminate\Support\Facades\Cache;
-use DB;
+use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
