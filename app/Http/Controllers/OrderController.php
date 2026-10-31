@@ -20,6 +20,7 @@ use App\Models\OrderHistoryArchive;
 use App\Models\OrderFinalCancel;
 use Exception;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use App\Exports\PendingOrdersExport;
 
 
@@ -312,7 +313,7 @@ class OrderController extends Controller
             //     ->send(new OrderConfirmation($emailContent));
         } catch (Exception $e) {
             // Log email error
-            \Log::error("Failed to send order confirmation email: " . $e->getMessage());
+            Log::error("Failed to send order confirmation email: " . $e->getMessage());
         }
     }
 
